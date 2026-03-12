@@ -78,16 +78,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 My Stats", callback_data="my_stats")]
     ]
     
-    await update.message.reply_text(
-        f"⚔️ Welcome to **{GAME_NAME}**!\n\n"
-        f"4 players. 4 races. 1 winner.\n"
-        f"Build, fight, survive depression, hate your enemies.\n\n"
-        f"Choose:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
-
-async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+await update.message.reply_text(
+    f"⚔️ Welcome to **Tribes: Last Standing**!\n\n"
+    f"4 players enter. 1 leaves.\n\n"
+    f"🔹 **Races:**\n"
+    f"👤 Human – balanced, faster growth\n"
+    f"🧝 Elf – high faith, can steal turns\n"
+    f"👹 Demon – high damage, but no kids\n"
+    f"🐺 Beastfolk – tanky, but always rebel\n\n"
+    f"🔹 **Each round:** +500 resources\n"
+    f"🔹 **Build** houses, farms, churches, factories...\n"
+    f"🔹 **Watch out for depression** – it eats your resources\n"
+    f"🔹 **Hate** gives crit chance in battle\n\n"
+    f"⚔️ Last tribe standing wins.\n\n"
+    f"Ready? Hit **New Game**!",
+    reply_markup=InlineKeyboardMarkup(keyboard),
+    parse_mode="Markdown"
+)async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
