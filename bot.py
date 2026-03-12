@@ -51,29 +51,63 @@ app = Flask(__name__)
 def index(): return '🤖 Bot is running!'
 @app.route('/health')
 def health(): return 'OK'
+# =============================================================================
+# БЛОК: ТЕКСТЫ (русский и английский)
+# =============================================================================
+TEXTS = {
+    "en": {
+        "welcome": "⚔️ <b>Welcome to {}!</b>\n\n4 players enter. 1 leaves.\n\n"
+                   "👤 Human – balanced\n🧝 Elf – high faith\n👹 Demon – high damage\n🐺 Beastfolk – tanky\n\n"
+                   "Ready? Hit <b>New Game</b>!",
+        "new_game": "⚔️ New Game",
+        "my_stats": "📊 My Stats",
+        "balance": "⚖️ Balance",
+        "language": "🌐 Language"
+    },
+    "ru": {
+        "welcome": "⚔️ <b>Добро пожаловать в {}!</b>\n\n4 игрока заходят. 1 выходит.\n\n"
+                   "👤 Человек – сбалансированный\n🧝 Эльф – высокая вера\n👹 Демон – высокий урон\n🐺 Зверолюд – живучий\n\n"
+                   "Готов? Жми <b>Новая игра</b>!",
+        "new_game": "⚔️ Новая игра",
+        "my_stats": "📊 Моя статистика",
+        "balance": "⚖️ Баланс",
+        "language": "🌐 Язык"
+    }
+}
+
+# Хранилище языков пользователей (потом заменим на базу данных)
+user_languages = {}
 
 # =============================================================================
 # БЛОК 5: КОМАНДА START (приветствие и главное меню)
 # =============================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Сохраняем игрока в базу
     conn = sqlite3.connect("game.db")
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO players (user_id, username, registered_нгat) VALUES (?, ?, ?)",
-              (update.effective_user.id, update.effective_user.username, datetime.now()))
+    c.execute("INSERT OR IGNORE INTO players (user_id, username, registered_at) VALUES (?, ?, ?)",
+              (user_id, update.effective_user.username, datetime.now()))
     conn.commit()
     conn.close()
     
+    # Получаем язык пользователя (по умолчанию английский)
+    lang = user_languages.get(user_id, "en")
+    
+    # Клавиатура с кнопками на нужном языке
     keyboard = [
-    [InlineKeyboardButton("⚔️ New Game", callback_data="new_game"),
-     InlineKeyboardButton("📊 My Stats", callback_data="my_stats")],
-    [InlineKeyboardButton("⚖️ Balance", callback_data="balance")],
-    [InlineKeyboardButton("🌐 Language", callback_data="language")]  # ← НОВАЯ КНОПКА
+        [InlineKeyboardButton(TEXTS[lang]["new_game"], callback_data="new_game"),
+         InlineKeyboardButton(TEXTS[lang]["my_stats"], callback_data="my_stats")],
+        [InlineKeyboardButton(TEXTS[lang]["balance"], callback_data="balance")],
+        [InlineKeyboardButton(TEXTS[lang]["language"], callback_data="language")]
     ]
+    
+    # Приветствие на нужном языке
     await update.message.reply_text(
-        f"⚔️ <b>Welcome to {GAME_NAME}!</b>\n\n4 players enter. 1 leaves.\n\n"
-        f"👤 Human – balanced\n🧝 Elf – high faith\n👹 Demon – high damage\n🐺 Beastfolk – tanky\n\n"
-        f"Ready? Hit <b>New Game</b>!",
-        reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+        TEXTS[lang]["welcome"].format(GAME_NAME),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
     )
 
 # =============================================================================
