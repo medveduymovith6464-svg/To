@@ -282,4 +282,15 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     lang = query.data.replace("setlang_", "")
-    await query.edit_message_text(f"✅ Language set to {'English' if lang == 'en' else 'Русский'}")
+    user_id = query.from_user.id
+    
+    # Сохраняем язык
+    user_languages[user_id] = lang
+    
+    # Подтверждение
+    if lang == "en":
+        text = "✅ Language set to English"
+    else:
+        text = "✅ Язык установлен на русский"
+    
+    await query.edit_message_text(text)
