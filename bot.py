@@ -237,29 +237,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(f"✅ Joined! {len(active_rooms[room_id]['players'])}/4", parse_mode="HTML")
 
 # =============================================================================
-# БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
-# =============================================================================
-def run_bot():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("report", report))
-    app.add_handler(CommandHandler("balance", balance))
-    app.add_handler(CommandHandler("stats", my_stats))
-    app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
-    app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
-    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
-    app.add_handler(CallbackQueryHandler(join_room, pattern="join_"))
-    app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
-    app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
-    app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
-    app.run_polling() 
-if __name__ == "__main__":
-    import threading
-    flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
-    flask_thread.daemon = True
-    flask_thread.start()
-    run_bot()
-# =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
 # =============================================================================
 async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -294,3 +271,27 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = "✅ Язык установлен на русский"
     
     await query.edit_message_text(text)
+
+# =============================================================================
+# БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
+# =============================================================================
+def run_bot():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("report", report))
+    app.add_handler(CommandHandler("balance", balance))
+    app.add_handler(CommandHandler("stats", my_stats))
+    app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
+    app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
+    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
+    app.add_handler(CallbackQueryHandler(join_room, pattern="join_"))
+    app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
+    app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
+    app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
+    app.run_polling() 
+if __name__ == "__main__":
+    import threading
+    flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
+    flask_thread.daemon = True
+    flask_thread.start()
+    run_bot()
