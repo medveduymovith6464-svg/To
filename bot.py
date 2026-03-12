@@ -58,15 +58,16 @@ def health(): return 'OK'
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect("game.db")
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO players (user_id, username, registered_at) VALUES (?, ?, ?)",
+    c.execute("INSERT OR IGNORE INTO players (user_id, username, registered_нгat) VALUES (?, ?, ?)",
               (update.effective_user.id, update.effective_user.username, datetime.now()))
     conn.commit()
     conn.close()
     
     keyboard = [
-        [InlineKeyboardButton("⚔️ New Game", callback_data="new_game")],
-        [InlineKeyboardButton("📊 My Stats", callback_data="my_stats")],
-        [InlineKeyboardButton("⚖️ Balance", callback_data="balance")]
+    [InlineKeyboardButton("⚔️ New Game", callback_data="new_game"),
+     InlineKeyboardButton("📊 My Stats", callback_data="my_stats")],
+    [InlineKeyboardButton("⚖️ Balance", callback_data="balance")],
+    [InlineKeyboardButton("🌐 Language", callback_data="language")]  # ← НОВАЯ КНОПКА
     ]
     await update.message.reply_text(
         f"⚔️ <b>Welcome to {GAME_NAME}!</b>\n\n4 players enter. 1 leaves.\n\n"
@@ -210,11 +211,36 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
     app.add_handler(CallbackQueryHandler(join_room, pattern="join_"))
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
-    app.run_polling()
-
+    app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
+    app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
+    app.run_polling() 
 if __name__ == "__main__":
     import threading
     flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
     flask_thread.daemon = True
     flask_thread.start()
     run_bot()
+# =============================================================================
+# БЛОК: ЯЗЫК (обработчик кнопки Language)
+# =============================================================================
+async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("🇬🇧 English", callback_data="setlang_en"),
+         InlineKeyboardButton("🇷🇺 Русский", callback_data="setlang_ru")]
+    ]
+    
+    await query.edit_message_text(
+        "🌐 <b>Select your language:</b>",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    lang = query.data.replace("setlang_", "")
+    await query.edit_message_text(f"✅ Language set to {'English' if lang == 'en' else 'Русский'}")
