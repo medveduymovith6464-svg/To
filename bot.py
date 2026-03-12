@@ -2,14 +2,19 @@ import logging
 import os
 import random
 import json
+import sys
 from datetime import datetime
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
+print("🚀 STARTING BOT...", file=sys.stdout)
+
 # ========== НАСТРОЙКИ ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GAME_NAME = "Tribes: Last Standing"
+
+print(f"🔑 Token loaded: {'YES' if TOKEN else 'NO'}", file=sys.stdout)
 
 # ========== ЛОГИ ==========
 logging.basicConfig(
@@ -78,23 +83,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 My Stats", callback_data="my_stats")]
     ]
     
-await update.message.reply_text(
-    f"⚔️ Welcome to **Tribes: Last Standing**!\n\n"
-    f"4 players enter. 1 leaves.\n\n"
-    f"🔹 **Races:**\n"
-    f"👤 Human – balanced, faster growth\n"
-    f"🧝 Elf – high faith, can steal turns\n"
-    f"👹 Demon – high damage, but no kids\n"
-    f"🐺 Beastfolk – tanky, but always rebel\n\n"
-    f"🔹 **Each round:** +500 resources\n"
-    f"🔹 **Build** houses, farms, churches, factories...\n"
-    f"🔹 **Watch out for depression** – it eats your resources\n"
-    f"🔹 **Hate** gives crit chance in battle\n\n"
-    f"⚔️ Last tribe standing wins.\n\n"
-    f"Ready? Hit **New Game**!",
-    reply_markup=InlineKeyboardMarkup(keyboard),
-    parse_mode="Markdown"
-)async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        f"⚔️ Welcome to **Tribes: Last Standing**!\n\n"
+        f"4 players enter. 1 leaves.\n\n"
+        f"🔹 **Races:**\n"
+        f"👤 Human – balanced, faster growth\n"
+        f"🧝 Elf – high faith, can steal turns\n"
+        f"👹 Demon – high damage, but no kids\n"
+        f"🐺 Beastfolk – tanky, but always rebel\n\n"
+        f"🔹 **Each round:** +500 resources\n"
+        f"🔹 **Build** houses, farms, churches, factories...\n"
+        f"🔹 **Watch out for depression** – it eats your resources\n"
+        f"🔹 **Hate** gives crit chance in battle\n\n"
+        f"⚔️ Last tribe standing wins.\n\n"
+        f"Ready? Hit **New Game**!",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
@@ -153,8 +160,7 @@ def health():
 
 # ========== ЗАПУСК ==========
 def run_bot():
-    global application
-    
+    print("🤖 Bot started polling...", file=sys.stdout)
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
@@ -162,15 +168,17 @@ def run_bot():
     application.add_handler(CallbackQueryHandler(join_room, pattern="join_"))
     application.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     
-    print("🤖 Bot started polling...")
+    print("✅ Handlers added, starting polling...", file=sys.stdout)
     application.run_polling()
 
 if __name__ == "__main__":
+    print("🚀 Starting Flask and Bot...", file=sys.stdout)
     import threading
+    
     bot_thread = threading.Thread(target=run_bot)
     bot_thread.daemon = True
     bot_thread.start()
     
     port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Flask server running on port {port}")
+    print(f"🚀 Flask server running on port {port}", file=sys.stdout)
     app.run(host="0.0.0.0", port=port)
