@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import sys
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,6 +11,8 @@ print("🚀 STARTING BOT...", flush=True)
 # ========== НАСТРОЙКИ ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GAME_NAME = "Tribes: Last Standing"
+YOUR_TELEGRAM_ID = 6950162933  # ЗАМЕНИ НА СВОЙ ID!
+
 print(f"🔑 Token loaded: {'YES' if TOKEN else 'NO'}", flush=True)
 
 # ========== ЛОГИ ==========
@@ -29,6 +32,14 @@ def index():
 def health():
     return 'OK'
 
+# ========== РАСЫ ==========
+RACES = {
+    "human": {"name": "👤 Human", "special": "+20% growth"},
+    "elf": {"name": "🧝 Elf", "special": "5% turn steal"},
+    "demon": {"name": "👹 Demon", "special": "No reproduction"},
+    "beast": {"name": "🐺 Beastfolk", "special": "10% rebellion"}
+}
+
 # ========== КОМАНДЫ БОТА ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -46,6 +57,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Ready? Hit **New Game**!",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
+    )
+
+async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    
+    # Если пользователь написал просто /report
+    if not context.args:
+        await update.message.reply_text(
+            "🐛 **Report a bug**\n\n"
+            "Please describe the issue you found:\n"
+            "`/report [your message]`\n\n"
+            "Example: `/report I clicked New Game and nothing happened`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Если есть текст ошибки
+    bug_text = ' '.join(context.args)
+    
+    # Отправляем себе
+    await context.bot.send_message(
+        chat_id=YOUR_TELEGRAM_ID,
+        text=f"🐞 **New Bug Report**\n"
+             f"From: @{update.effective_user.username or 'No username'} (ID: {user.id})\n"
+             f"Message: {bug_text}"
+    )
+    
+    # Подтверждение пользователю
+    await update.message.reply_text(
+        "✅ Thank you! Your bug report has been sent to the developer."
     )
 
 async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,19 +116,12 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id, race_id = data[1], data[2]
     await query.edit_message_text(f"✅ You joined as {RACES[race_id]['name']}!\n\nWaiting for other players...", parse_mode="Markdown")
 
-# ========== РАСЫ ==========
-RACES = {
-    "human": {"name": "👤 Human", "special": "+20% growth"},
-    "elf": {"name": "🧝 Elf", "special": "5% turn steal"},
-    "demon": {"name": "👹 Demon", "special": "No reproduction"},
-    "beast": {"name": "🐺 Beastfolk", "special": "10% rebellion"}
-}
-
 # ========== ЗАПУСК ==========
 def run_bot():
     print("🤖 Starting bot in main thread...", flush=True)
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("report", report))
     application.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
     application.add_handler(CallbackQueryHandler(join_room, pattern="join_"))
     application.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
@@ -96,7 +130,6 @@ def run_bot():
 
 if __name__ == "__main__":
     import threading
-    # Запускаем Flask в отдельном потоке, а бота в главном
     print("🚀 Starting Flask in background...", flush=True)
     flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
     flask_thread.daemon = True
