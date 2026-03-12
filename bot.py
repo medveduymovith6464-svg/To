@@ -8,6 +8,11 @@ from datetime import datetime
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+# =============================================================================
+# ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (ВОТ СЮДА!)
+# =============================================================================
+user_languages = {}  # Хранилище языков пользователей
+# =============================================================================
 
 # =============================================================================
 # БЛОК 1: НАСТРОЙКИ И ЗАПУСК (всё что нужно поменять один раз)
