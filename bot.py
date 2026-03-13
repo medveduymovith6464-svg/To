@@ -420,13 +420,23 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Если это создатель
     if query.from_user.id == active_rooms[room_id]["creator"]:
+        # 👇 МЕНЯЕМ СООБЩЕНИЕ, А НЕ ШЛЁМ НОВОЕ
+        game_keyboard = [
+            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
+             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+            [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+        ]
+        
         await query.edit_message_text(
             f"✅ You chose {RACES[race_id]['name']}!\n\n"
-            f"⏳ Waiting for someone to join...",
+            f"🎮 **Game Menu**\n"
+            f"Players: 1/2\n"
+            f"Waiting for someone to join...",
+            reply_markup=InlineKeyboardMarkup(game_keyboard),
             parse_mode="HTML"
         )
         
-        # Кнопка Play для всех
+        # Кнопка Play для всех (отдельным сообщением)
         play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
         
         await context.bot.send_message(
@@ -440,15 +450,25 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Если это второй игрок
+    # 👇 ТОЖЕ МЕНЯЕМ СООБЩЕНИЕ
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+        [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+    ]
+    
     await query.edit_message_text(
         f"✅ You chose {RACES[race_id]['name']}!\n\n"
-        f"⏳ Waiting for host to start...",
+        f"🎮 **Game Menu**\n"
+        f"Players: 2/2\n"
+        f"Game started!",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
     
     # Запускаем игру
     await start_game(room_id, context)
-
+    
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -660,6 +680,9 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
+    app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
+    app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
+    app.add_handler(CallbackQueryHandler(end_turn, pattern="endturn_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))  # ← ЭТО!
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
     app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
