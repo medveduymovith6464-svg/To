@@ -470,8 +470,8 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if not player:
-    await query.edit_message_text("❌ You're not in a game!")
-    return
+        await query.edit_message_text("❌ You're not in a game!")
+        return
     
     text = f"🏛 <b>Your City</b>\n\n"
     text += f"🍞 Food: {player.food}/{player.food_limit}\n"
