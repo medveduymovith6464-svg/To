@@ -643,6 +643,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "creator": query.from_user.id,
         "stage": "picking",
         "choices": {}
+        "allowed": [query.from_user.id]
     }
     
     # Показываем создателю выбор расы
@@ -672,11 +673,25 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Room expired")
         return
     
+    # 🔥 ПРОВЕРКА ОЧЕРЕДИ - только допущенные могут выбирать
+    if query.from_user.id not in active_rooms[room_id].get("allowed", []):
+        await query.answer("❌ It's not your turn!", show_alert=True)
+        return
+    
+    # Проверяем, не выбрал ли уже этот игрок расу
+    if query.from_user.id in active_rooms[room_id]["choices"]:
+        await query.answer("You already chose!", show_alert=True)
+        return
+    
+    # Сохраняем выбор
+    active_rooms[room_id]["choices"][query.from_user.id] = race_id
+    
+    # 🔥 Убираем этого игрока из допущенных (чтобы не мог выбрать снова)
+    if query.from_user.id in active_rooms[room_id]["allowed"]:
+        active_rooms[room_id]["allowed"].remove(query.from_user.id)
+    
     # Если это создатель (первый игрок)
     if query.from_user.id == active_rooms[room_id]["creator"]:
-        # Сохраняем выбор создателя
-        active_rooms[room_id]["choices"][query.from_user.id] = race_id
-        
         await query.edit_message_text(
             f"✅ You chose {RACES[race_id]['name']}!\n\n"
             f"⏳ Waiting for someone to join...",
@@ -697,13 +712,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Если это второй игрок (нажал Play)
-    if query.from_user.id in active_rooms[room_id]["choices"]:
-        await query.answer("You already chose!", show_alert=True)
-        return
-    
-    # Сохраняем выбор второго
-    active_rooms[room_id]["choices"][query.from_user.id] = race_id
-    
     await query.edit_message_text(
         f"✅ You chose {RACES[race_id]['name']}!\n\n"
         f"⏳ Waiting for host to start...",
@@ -724,53 +732,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Запускаем игру
     await start_game(room_id, context)
-     
-async def start_game(room_id, context):
-    if room_id not in active_rooms:
-        return
     
-    if len(active_rooms[room_id]["choices"]) != 2:
-        return
-    
-    # Создаём игроков
-    players = []
-    player_objects = []
-    for user_id, race_id in active_rooms[room_id]["choices"].items():
-        player = Player(user_id, race_id)
-        players.append({"user_id": user_id, "race": race_id})
-        player_objects.append(player)
-    
-    # Определяем победителя (пока рандом)
-    winner = random.choice(players)
-    
-    # Отправляем результат
-    for player in player_objects:
-        try:
-            if player.user_id == winner["user_id"]:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"🎉 <b>YOU WIN!</b>",
-                    parse_mode="HTML"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"💔 <b>You lose...</b>",
-                    parse_mode="HTML"
-                )
-        except:
-            pass
-    
-    # Сохраняем в базу
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-              (datetime.now(), winner["race"], winner["user_id"], json.dumps(players), room_id))
-    conn.commit()
-    conn.close()
-    
-    del active_rooms[room_id]
-
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -780,52 +742,29 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Room expired")
         return
     
-    if active_rooms[room_id]["stage"] != "ready":
-        await query.edit_message_text("❌ Game not ready!")
+    # Проверяем, не полная ли комната
+    if len(active_rooms[room_id]["choices"]) >= 2:
+        await query.edit_message_text("❌ Game already full!")
         return
     
-    # Только создатель может начать
-    if query.from_user.id != active_rooms[room_id]["creator"]:
-        await query.answer("Only the host can start the game!", show_alert=True)
-        return
+    # 🔥 Добавляем второго игрока в допущенные (чтобы мог выбрать расу)
+    if "allowed" not in active_rooms[room_id]:
+        active_rooms[room_id]["allowed"] = []
+    active_rooms[room_id]["allowed"].append(query.from_user.id)
     
-    # Создаём игроков
-    players = []
-    for user_id, race_id in active_rooms[room_id]["choices"].items():
-        player = Player(user_id, race_id)
-        players.append(player)
+    # Показываем второму игроку выбор расы
+    race_keyboard = []
+    for race_id in RACES:
+        race_keyboard.append([InlineKeyboardButton(
+            RACES[race_id]["name"], 
+            callback_data=f"race_{room_id}_{race_id}"
+        )])
     
-    # Определяем победителя (пока рандом)
-    winner = random.choice(players)
-    
-    # Отправляем результат
-    for player in players:
-        try:
-            if player.user_id == winner.user_id:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"🎉 <b>YOU WIN!</b>",
-                    parse_mode="HTML"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"💔 <b>You lose...</b>",
-                    parse_mode="HTML"
-                )
-        except:
-            pass
-    
-    # Сохраняем в базу
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-              (datetime.now(), winner.race_id, winner.user_id, json.dumps([p.to_dict() for p in players]), room_id))
-    conn.commit()
-    conn.close()
-    
-    del active_rooms[room_id]
-    await query.edit_message_text("🎮 Game started! Check your PM for results.", parse_mode="HTML")
+    await query.edit_message_text(
+        f"🎭 <b>Choose your race!</b>",
+        reply_markup=InlineKeyboardMarkup(race_keyboard),
+        parse_mode="HTML"
+    )
 
 async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
