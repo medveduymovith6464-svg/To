@@ -498,7 +498,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "players": [],
         "creator": query.from_user.id,
         "stage": "picking",
-        "choices": {}
+        "choices": {},
         "allowed": [query.from_user.id]
     }
     
