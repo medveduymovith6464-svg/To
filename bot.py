@@ -481,7 +481,21 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 Population: {player.population}\n"
     text += f"🏗 Buildings: {len(player.buildings)}"
     
-    await query.edit_message_text(text, parse_mode="HTML")
+    # Создаём игровое меню
+game_keyboard = [
+    [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
+     InlineKeyboardButton("⚒ Build", callback_data="build")],
+    [InlineKeyboardButton("⚔️ War", callback_data="war"),
+     InlineKeyboardButton("📜 Events", callback_data="events")]
+]
+
+await query.edit_message_text(
+    f"✅ You joined as {RACES[race_id]['name']}!\n\n"
+    f"Players: {len(active_rooms[room_id]['players'])}/4\n\n"
+    f"<b>Game Menu:</b>",
+    reply_markup=InlineKeyboardMarkup(game_keyboard),
+    parse_mode="HTML"
+)
 
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
