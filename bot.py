@@ -470,8 +470,8 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if not player:
-        await query.edit_message_text("❌ You're not in a game!")
-        return
+    await query.edit_message_text("❌ You're not in a game!")
+    return
     
     text = f"🏛 <b>Your City</b>\n\n"
     text += f"🍞 Food: {player.food}/{player.food_limit}\n"
@@ -486,44 +486,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 Population: {player.population}\n"
     text += f"🏗 Buildings: {len(player.buildings)}"
     
-    await query.edit_message_text(text, parse_mode="HTML"
-) 
-# =============================================================================
-# БЛОК: МОЙ ГОРОД (показывает ресурсы игрока)
-# =============================================================================
-async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    # Находим игрока в активной комнате (если есть)
-    user_id = query.from_user.id
-    player = None
-    
-    for room in active_rooms.values():
-        for p in room["players"]:
-            if p.user_id == user_id:
-                player = p
-                break
-    
-    if not player:
-        await query.edit_message_text("❌ You're not in a game!")
-        return
-    
-    text = f"🏛 <b>Your City</b>\n\n"
-    text += f"🍞 Food: {player.food}/{player.food_limit}\n"
-    text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
-    text += f"⚒ Labor: {player.labor}/{player.labor_limit}\n"
-    text += f"❤️ Health: {player.health}/{player.health_limit}\n"
-    text += f"🧠 Intelligence: {player.intelligence}/{player.intelligence_limit}\n"
-    text += f"😔 Depression: {player.depression}\n"
-    text += f"😈 Hate: {player.hate}\n"
-    text += f"💰 Money: {player.money}\n"
-    text += f"📦 Materials: {player.materials}\n"
-    text += f"👥 Population: {player.population}\n"
-    text += f"🏗 Buildings: {len(player.buildings)}"
-    
-    await query.edit_message_text(text, parse_mode="HTML")
-
+    await query.edit_message_text(text, parse_mode="HTML")                                                                
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
 # =============================================================================
