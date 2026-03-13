@@ -431,7 +431,21 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"🏆 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
         return
     
-    await query.edit_message_text(f"✅ Joined! {len(active_rooms[room_id]['players'])}/4", parse_mode="HTML")
+    # Создаём игровое меню
+game_keyboard = [
+    [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
+     InlineKeyboardButton("⚒ Build", callback_data="build")],
+    [InlineKeyboardButton("⚔️ War", callback_data="war"),
+     InlineKeyboardButton("📜 Events", callback_data="events")]
+]
+
+await query.edit_message_text(
+    f"✅ You joined as {RACES[race_id]['name']}!\n\n"
+    f"Players: {len(active_rooms[room_id]['players'])}/4\n\n"
+    f"<b>Game Menu:</b>",
+    reply_markup=InlineKeyboardMarkup(game_keyboard),
+    parse_mode="HTML"
+)
 
 # =============================================================================
 # БЛОК: 9.5 МОЙ ГОРОД (показывает ресурсы игрока)
