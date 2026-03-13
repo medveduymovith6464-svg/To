@@ -420,7 +420,7 @@ if len(active_rooms[room_id]["players"]) == 2:
     conn.close()
     
     del active_rooms[room_id]
-    await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
+        await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
     return  # ← функция заканчивается ТОЛЬКО здесь
 
 # 👇 А ЭТО ИГРОВОЕ МЕНЮ ДЛЯ ТЕХ, КТО ЕЩЁ В ИГРЕ (НЕ 4 ИГРОКА)
