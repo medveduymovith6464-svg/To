@@ -403,41 +403,41 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Room expired")
         return
     
-    # Создаём игрока с ресурсами
+    # Создаём игрока
     player = Player(query.from_user.id, race_id)
     active_rooms[room_id]["players"].append(player)   
     
-# ... предыдущий код ...
-
-if len(active_rooms[room_id]["players"]) == 2:
-    winner = random.choice(active_rooms[room_id]["players"])
+    # ЕСЛИ 2 ИГРОКА
+    if len(active_rooms[room_id]["players"]) == 2:
+        winner = random.choice(active_rooms[room_id]["players"])
+        
+        # Сохраняем в базу
+        conn = sqlite3.connect("game.db")
+        c = conn.cursor()
+        c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
+                  (datetime.now(), winner.race_id, winner.user_id, json.dumps([p.to_dict() for p in active_rooms[room_id]["players"]]), room_id))
+        conn.commit()
+        conn.close()
+        
+        del active_rooms[room_id]
+        await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")  # ← 8 ПРОБЕЛОВ!
+        return
     
-    # Сохраняем в базу
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute(...)
-    conn.commit()
-    conn.close()
+    # ЕСЛИ НЕ 2 ИГРОКА - ИГРОВОЕ МЕНЮ
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
+         InlineKeyboardButton("⚒ Build", callback_data="build")],
+        [InlineKeyboardButton("⚔️ War", callback_data="war"),
+         InlineKeyboardButton("📜 Events", callback_data="events")]
+    ]
     
-    del active_rooms[room_id]
-    await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
-    return  # ← функция заканчивается ТОЛЬКО здесь
-
-# 👇 А ЭТО ИГРОВОЕ МЕНЮ ДЛЯ ТЕХ, КТО ЕЩЁ В ИГРЕ (НЕ 4 ИГРОКА)
-game_keyboard = [
-    [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
-     InlineKeyboardButton("⚒ Build", callback_data="build")],
-    [InlineKeyboardButton("⚔️ War", callback_data="war"),
-     InlineKeyboardButton("📜 Events", callback_data="events")]
-]
-
-await query.edit_message_text(
-    f"✅ You joined as {RACES[race_id]['name']}!\n\n"
-    f"Players: {len(active_rooms[room_id]['players'])}/2\n\n"
-    f"<b>Game Menu:</b>",
-    reply_markup=InlineKeyboardMarkup(game_keyboard),
-    parse_mode="HTML"
-)
+    await query.edit_message_text(
+        f"✅ You joined as {RACES[race_id]['name']}!\n\n"
+        f"Players: {len(active_rooms[room_id]['players'])}/2\n\n"
+        f"<b>Game Menu:</b>",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
+        parse_mode="HTML"
+    )
 
 # =============================================================================
 # БЛОК 9.5: МОЙ ГОРОД (показывает ресурсы игрока)
