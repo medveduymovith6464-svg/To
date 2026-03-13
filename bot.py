@@ -389,6 +389,49 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    room_id = query.data.replace("join_", "")
+    
+    if room_id not in active_rooms:
+        await query.edit_message_text("❌ Room expired")
+        return
+    
+    # Проверяем, не полная ли комната
+    if len(active_rooms[room_id]["choices"]) >= 2:
+        await query.edit_message_text("❌ Game already full!")
+        return
+    
+    # Добавляем второго игрока в допущенные
+    if "allowed" not in active_rooms[room_id]:
+        active_rooms[room_id]["allowed"] = []
+    active_rooms[room_id]["allowed"].append(query.from_user.id)
+    
+    # Показываем второму игроку выбор расы
+    race_keyboard = []
+    for race_id in RACES:
+        race_keyboard.append([InlineKeyboardButton(
+            RACES[race_id]["name"], 
+            callback_data=f"race_{room_id}_{race_id}"
+        )])
+    
+    await query.edit_message_text(
+        f"🎭 <b>Choose your race!</b>",
+        reply_markup=InlineKeyboardMarkup(race_keyboard),
+        parse_mode="HTML"
+    )
+    
+    # Уведомляем создателя
+    try:
+        await context.bot.send_message(
+            chat_id=active_rooms[room_id]["creator"],
+            text=f"👋 Someone wants to join! They're choosing a race...",
+            parse_mode="HTML"
+        )
+    except:
+        pass
+
 async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
