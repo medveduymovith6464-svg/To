@@ -403,11 +403,17 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Room expired")
         return
     
+    # Проверяем, не выбрал ли уже этот игрок расу
+    for p in active_rooms[room_id]["players"]:
+        if p.user_id == query.from_user.id:
+            await query.answer("You already chose a race!", show_alert=True)
+            return
+    
     # Создаём игрока
     player = Player(query.from_user.id, race_id)
-    active_rooms[room_id]["players"].append(player)   
+    active_rooms[room_id]["players"].append(player)
     
-    # ЕСЛИ 2 ИГРОКА
+    # Если собралось 2 игрока
     if len(active_rooms[room_id]["players"]) == 2:
         winner = random.choice(active_rooms[room_id]["players"])
         
@@ -419,26 +425,60 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
         conn.close()
         
+        # Обоим игрокам показываем результат
+        for p in active_rooms[room_id]["players"]:
+            try:
+                if p.user_id == winner.user_id:
+                    await context.bot.send_message(
+                        chat_id=p.user_id,
+                        text=f"🎉 <b>YOU WIN!</b>\n\nWinner: {RACES[winner.race_id]['name']}",
+                        parse_mode="HTML"
+                    )
+                else:
+                    await context.bot.send_message(
+                        chat_id=p.user_id,
+                        text=f"💔 <b>You lose...</b>\n\nWinner: {RACES[winner.race_id]['name']}",
+                        parse_mode="HTML"
+                    )
+            except:
+                pass
+        
         del active_rooms[room_id]
-        await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")  # ← 8 ПРОБЕЛОВ!
+        await query.edit_message_text(f"🎮 Game Over! Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
         return
     
-    # ЕСЛИ НЕ 2 ИГРОКА - ИГРОВОЕ МЕНЮ
-    game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
-         InlineKeyboardButton("⚒ Build", callback_data="build")],
-        [InlineKeyboardButton("⚔️ War", callback_data="war"),
-         InlineKeyboardButton("📜 Events", callback_data="events")]
-    ]
+    # Если игрок 1 выбрал, ждём игрока 2
+    # Сообщение для игрока, который только что выбрал
+    waiting_text = f"✅ You joined as {RACES[race_id]['name']}!\n\n⏳ Waiting for other player...\nPlayers: {len(active_rooms[room_id]['players'])}/2"
+    await query.edit_message_text(waiting_text, parse_mode="HTML")
     
-    await query.edit_message_text(
-        f"✅ You joined as {RACES[race_id]['name']}!\n\n"
-        f"Players: {len(active_rooms[room_id]['players'])}/2\n\n"
-        f"<b>Game Menu:</b>",
-        reply_markup=InlineKeyboardMarkup(game_keyboard),
-        parse_mode="HTML"
-    )
-
+    # Отправляем уведомление второму игроку, что его ход
+    # В реальности кнопки выбора расы уже висят у второго игрока из join_room
+    # Но можно отправить ему напоминание
+    other_player_id = None
+    for p in active_rooms[room_id]["players"]:
+        if p.user_id != query.from_user.id:
+            other_player_id = p.user_id
+            break
+    
+    if other_player_id:
+        try:
+            # Показываем второму игроку кнопки выбора расы (если их нет)
+            keyboard = []
+            for rid in RACES:
+                keyboard.append([InlineKeyboardButton(
+                    RACES[rid]["name"], 
+                    callback_data=f"race_{room_id}_{rid}"
+                )])
+            
+            await context.bot.send_message(
+                chat_id=other_player_id,
+                text="🎭 <b>Your turn to choose race!</b>",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except:
+            pass
 # =============================================================================
 # БЛОК 9.5: МОЙ ГОРОД (показывает ресурсы игрока)
 # =============================================================================
