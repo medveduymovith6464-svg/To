@@ -225,6 +225,106 @@ class Player:
             "population_growth": self.population_growth,
             "buildings": self.buildings
         }
+
+# =============================================================================
+# БЛОК 3.6: ЗДАНИЯ (цены и эффекты)
+# =============================================================================
+BUILDINGS = {
+    # Начальные
+    "house": {
+        "name": "🏠 House",
+        "cost": 50,
+        "effect": "+1% population/round",
+        "apply": lambda p: setattr(p, 'population_growth', p.population_growth + 1)
+    },
+    "farm": {
+        "name": "🌱 Farm", 
+        "cost": 100,
+        "effect": "+50 food/round",
+        "apply": lambda p: setattr(p, 'food', p.food + 50)
+    },
+    "sawmill": {
+        "name": "🪵 Sawmill",
+        "cost": 200, 
+        "effect": "+20 materials/round",
+        "apply": lambda p: setattr(p, 'materials', p.materials + 20)
+    },
+    "church": {
+        "name": "⛪ Church",
+        "cost": 1000,
+        "effect": "+50 faith/round",
+        "apply": lambda p: setattr(p, 'faith', p.faith + 50)
+    },
+    
+    # Средние
+    "forge": {
+        "name": "⚒ Forge",
+        "cost": 800,
+        "effect": "+10 bloodlust",
+        "apply": lambda p: setattr(p, 'bloodlust', p.bloodlust + 10)
+    },
+    "laboratory": {
+        "name": "🔬 Laboratory",
+        "cost": 1350,
+        "effect": "+20 intelligence/round",
+        "apply": lambda p: setattr(p, 'intelligence', p.intelligence + 20)
+    },
+    "mine": {
+        "name": "🕳 Mine",
+        "cost": 1500,
+        "effect": "+100 materials/round",
+        "apply": lambda p: setattr(p, 'materials', p.materials + 100)
+    },
+    "tax_office": {
+        "name": "💰 Tax Office",
+        "cost": 5000,
+        "effect": "+30 money/round",
+        "apply": lambda p: setattr(p, 'money', p.money + 30)
+    },
+    
+    # Элитные
+    "library": {
+        "name": "📚 Library",
+        "cost": 8000,
+        "effect": "+50 intelligence/round",
+        "apply": lambda p: setattr(p, 'intelligence', p.intelligence + 50)
+    },
+    "necropolis": {
+        "name": "🪦 Necropolis",
+        "cost": 12222,
+        "effect": "Resurrect 10% units after battle",
+        "apply": lambda p: None  # Будет реализовано позже
+    },
+    
+    # Легендарные (20000)
+    "sacred_grove": {
+        "name": "🌳 Sacred Grove",
+        "cost": 20000,
+        "effect": "+1000 health, +500 bloodlust, +1000 faith",
+        "apply": lambda p: (setattr(p, 'health', p.health + 1000),
+                           setattr(p, 'bloodlust', p.bloodlust + 500),
+                           setattr(p, 'faith', p.faith + 1000))
+    },
+    "hell": {
+        "name": "🔥 Hell",
+        "cost": 20000,
+        "effect": "+10 units/round",
+        "apply": lambda p: setattr(p, 'population', p.population + 10)
+    },
+    "bone_throne": {
+        "name": "🦴 Bone Throne",
+        "cost": 20000,
+        "effect": "Units don't eat food",
+        "apply": lambda p: None  # Будет реализовано позже
+    },
+    "steam_engine": {
+        "name": "⚙ Steam Engine",
+        "cost": 20000,
+        "effect": "+500 dev points/round",
+        "apply": lambda p: setattr(p, 'dev_points', p.dev_points + 500)
+    }
+}
+
 # =============================================================================
 # БЛОК 4: ВСПОМОГАТЕЛЬНЫЙ ФЛАСК (только чтобы Render не ругался)
 # =============================================================================
@@ -468,6 +568,57 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Запускаем игру
     await start_game(room_id, context)
+
+async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    room_id = "_".join(data[1:])
+    
+    if room_id not in active_rooms:
+        await query.edit_message_text("❌ Room expired")
+        return
+    
+    user_id = query.from_user.id
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == user_id:
+            player = p
+            break
+    
+    if not player:
+        await query.edit_message_text("❌ You're not in this game!")
+        return
+    
+    if user_id not in active_rooms[room_id].get("allowed", []):
+        await query.answer("❌ It's not your turn!", show_alert=True)
+        return
+    
+    # Кнопки для всех зданий
+    buttons = []
+    for b_id, b_data in BUILDINGS.items():
+        # Проверяем, хватает ли очков
+        cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
+        buttons.append([InlineKeyboardButton(
+            f"{b_data['name']} | {cost_color} {b_data['cost']}💰",
+            callback_data=f"build_{room_id}_{b_id}"
+        )])
+    
+    # Добавляем кнопки навигации
+    nav_buttons = [
+        [InlineKeyboardButton("🔙 Back to Game", callback_data=f"back_to_game_{room_id}")],
+        [InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_build_{room_id}")]
+    ]
+    
+    await query.edit_message_text(
+        f"🏗️ **Construction Menu**\n"
+        f"Your Dev Points: {player.dev_points}💰\n"
+        f"🟢 = can afford, 🔴 = too expensive\n\n"
+        f"Choose building:",
+        reply_markup=InlineKeyboardMarkup(buttons + nav_buttons),
+        parse_mode="HTML"
+    )
     
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -676,6 +827,7 @@ def run_bot():
     app.add_handler(CommandHandler("stats", my_stats))
     app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
     app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
+    app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
     app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
