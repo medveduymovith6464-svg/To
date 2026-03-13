@@ -658,6 +658,65 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает ход текущего игрока и передаёт очередь"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    room_id = "_".join(data[1:])
+    
+    if room_id not in active_rooms:
+        await query.edit_message_text("❌ Room expired")
+        return
+    
+    user_id = query.from_user.id
+    
+    # Проверяем, что игрок вообще в игре
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == user_id:
+            player = p
+            break
+    
+    if not player:
+        await query.edit_message_text("❌ You're not in this game!")
+        return
+    
+    # Передаём ход другому игроку
+    current_allowed = active_rooms[room_id].get("allowed", [])
+    
+    # Находим другого игрока
+    other_player = None
+    for p in active_rooms[room_id]["players"]:
+        if p.user_id != user_id:
+            other_player = p
+            break
+    
+    if other_player:
+        # Меняем допущенного
+        active_rooms[room_id]["allowed"] = [other_player.user_id]
+        
+        # Уведомляем обоих
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⏭ Your turn ended. Waiting for opponent...",
+            parse_mode="HTML"
+        )
+        
+        await context.bot.send_message(
+            chat_id=other_player.user_id,
+            text="🎮 **Your turn now!**",
+            parse_mode="HTML"
+        )
+        
+        await query.edit_message_text(
+            f"✅ Turn ended. It's now {other_player.user_id}'s turn.",
+            parse_mode="HTML"
+        )
+    else:
+        await query.answer("No other player found!", show_alert=True)
+
 async def start_game(room_id, context):
     if room_id not in active_rooms:
         return
