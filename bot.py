@@ -366,11 +366,14 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_rooms[room_id] = {
         "players": [], 
         "waiting": [],
-        "creator": query.from_user.id
+        "creator": query.from_user.id,
+        "message_id": None  # для отслеживания сообщения с кнопками
     }
     keyboard = [[InlineKeyboardButton("🔌 Join", callback_data=f"join_{room_id}")]]
-    await query.edit_message_text(f"🏆 <b>Room {room_id}</b>\n\n0/2 players", 
-                                  reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    msg = await query.edit_message_text(f"🏆 <b>Room {room_id}</b>\n\n0/2 players", 
+                                        reply_markup=InlineKeyboardMarkup(keyboard), 
+                                        parse_mode="HTML")
+    active_rooms[room_id]["message_id"] = msg.message_id
 
 async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -392,11 +395,7 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("You're already in this game!", show_alert=True)
             return
     
-    # Добавляем в список ожидающих (только если ещё не в игре)
-    if query.from_user.id not in active_rooms[room_id]["waiting"]:
-        active_rooms[room_id]["waiting"].append(query.from_user.id)
-    
-    # Показываем кнопки с расами
+    # Показываем кнопки с расами ЭТОМУ игроку
     keyboard = []
     for race_id in RACES:
         keyboard.append([InlineKeyboardButton(
@@ -437,10 +436,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     player = Player(query.from_user.id, race_id)
     active_rooms[room_id]["players"].append(player)
     
-    # Убираем из ожидающих
-    if query.from_user.id in active_rooms[room_id]["waiting"]:
-        active_rooms[room_id]["waiting"].remove(query.from_user.id)
-    
     # Если собралось 2 игрока
     if len(active_rooms[room_id]["players"]) == 2:
         winner = random.choice(active_rooms[room_id]["players"])
@@ -459,56 +454,35 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if p.user_id == winner.user_id:
                     await context.bot.send_message(
                         chat_id=p.user_id,
-                        text=f"🎉 <b>YOU WIN!</b>\n\nWinner: {RACES[winner.race_id]['name']}",
+                        text=f"🎉 <b>YOU WIN!</b>",
                         parse_mode="HTML"
                     )
                 else:
                     await context.bot.send_message(
                         chat_id=p.user_id,
-                        text=f"💔 <b>You lose...</b>\n\nWinner: {RACES[winner.race_id]['name']}",
+                        text=f"💔 <b>You lose...</b>",
                         parse_mode="HTML"
                     )
             except:
                 pass
         
-        # Всем ожидающим говорим что игра началась
-        for waiting_id in active_rooms[room_id]["waiting"]:
-            try:
-                await context.bot.send_message(
-                    chat_id=waiting_id,
-                    text="❌ Game already started!",
-                    parse_mode="HTML"
-                )
-            except:
-                pass
-        
         del active_rooms[room_id]
-        await query.edit_message_text(f"🎮 Game Over! Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
         return
     
-    # Если первый игрок выбрал, ждём второго
+    # Если первый игрок выбрал
     waiting_text = f"✅ You joined as {RACES[race_id]['name']}!\n\n⏳ Waiting for other player...\nPlayers: 1/2"
     await query.edit_message_text(waiting_text, parse_mode="HTML")
     
-    # Отправляем уведомление ВСЕМ ожидающим (кроме текущего)
-    for waiting_id in active_rooms[room_id]["waiting"]:
-        if waiting_id != query.from_user.id:
-            try:
-                keyboard = []
-                for rid in RACES:
-                    keyboard.append([InlineKeyboardButton(
-                        RACES[rid]["name"], 
-                        callback_data=f"race_{room_id}_{rid}"
-                    )])
-                
-                await context.bot.send_message(
-                    chat_id=waiting_id,
-                    text="🎭 <b>Your turn to choose race!</b>",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode="HTML"
-                )
-            except:
-                pass
+    # Отправляем уведомление СОЗДАТЕЛЮ комнаты (если это не он)
+    if query.from_user.id != active_rooms[room_id]["creator"]:
+        try:
+            await context.bot.send_message(
+                chat_id=active_rooms[room_id]["creator"],
+                text=f"🎭 Player {query.from_user.first_name} joined your game!",
+                parse_mode="HTML"
+            )
+        except:
+            pass
 # =============================================================================
 # БЛОК 9.5: МОЙ ГОРОД (показывает ресурсы игрока)
 # =============================================================================
