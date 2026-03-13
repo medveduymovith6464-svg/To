@@ -365,7 +365,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = f"room_{random.randint(1000, 9999)}"
     active_rooms[room_id] = {"players": []}
     keyboard = [[InlineKeyboardButton("🔌 Join", callback_data=f"join_{room_id}")]]
-    await query.edit_message_text(f"🏆 <b>Room {room_id}</b>\n\n0/4 players", 
+    await query.edit_message_text(f"🏆 <b>Room {room_id}</b>\n\n0/2 players", 
                                   reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -409,7 +409,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 # ... предыдущий код ...
 
-if len(active_rooms[room_id]["players"]) == 4:
+if len(active_rooms[room_id]["players"]) == 2:
     winner = random.choice(active_rooms[room_id]["players"])
     
     # Сохраняем в базу
@@ -444,7 +444,7 @@ game_keyboard = [
 
 await query.edit_message_text(
     f"✅ You joined as {RACES[race_id]['name']}!\n\n"
-    f"Players: {len(active_rooms[room_id]['players'])}/4\n\n"
+    f"Players: {len(active_rooms[room_id]['players'])}/2\n\n"
     f"<b>Game Menu:</b>",
     reply_markup=InlineKeyboardMarkup(game_keyboard),
     parse_mode="HTML"
