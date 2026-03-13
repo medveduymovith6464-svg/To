@@ -354,9 +354,9 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text("✅ Thanks! Bug reported.", parse_mode="HTML")
 
-# =============================================================================
+#  =============================================================================
 # БЛОК 9: КОМНАТЫ (создание и управление игровыми комнатами)
-# =============================================================================
+#  =============================================================================
 active_rooms = {}
 
 async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -372,48 +372,66 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     room_id = query.data.replace("join_", "")
+    
     if room_id not in active_rooms:
         await query.edit_message_text("❌ Room expired")
         return
     
+    # Показываем кнопки с расами
     keyboard = []
     for race_id in RACES:
-        keyboard.append([InlineKeyboardButton(RACES[race_id]["name"], callback_data=f"race_{room_id}_{race_id}")])
-    await query.edit_message_text("🎭 Choose race:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        keyboard.append([InlineKeyboardButton(
+            RACES[race_id]["name"], 
+            callback_data=f"race_{room_id}_{race_id}"
+        )])
+    
+    await query.edit_message_text(
+        "🎭 Choose race:", 
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode="HTML"
+    )
 
 async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    _, room_id, race_id = query.data.split("_")
+    
+    parts = query.data.split("_")
+    race_id = parts[-1]
+    room_id = "_".join(parts[1:-1])
     
     if room_id not in active_rooms:
         await query.edit_message_text("❌ Room expired")
         return
     
+    # Создаём игрока с ресурсами
     player = Player(query.from_user.id, race_id)
     active_rooms[room_id]["players"].append(player)   
+    
     if len(active_rooms[room_id]["players"]) == 4:
         winner = random.choice(active_rooms[room_id]["players"])
         
         # Сохраняем в базу
         conn = sqlite3.connect("game.db")
         c = conn.cursor()
+        
+        # Преобразуем игроков в словари для JSON
+        players_data = [p.to_dict() for p in active_rooms[room_id]["players"]]
+        
         c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-                  (datetime.now(), winner["race"], winner["user_id"], json.dumps(active_rooms[room_id]["players"]), room_id))
+                  (datetime.now(), winner.race_id, winner.user_id, json.dumps(players_data), room_id))
         
         for player in active_rooms[room_id]["players"]:
-            c.execute("UPDATE players SET games_played = games_played + 1 WHERE user_id = ?", (player["user_id"],))
-            if player["user_id"] == winner["user_id"]:
-                c.execute("UPDATE players SET wins = wins + 1 WHERE user_id = ?", (player["user_id"],))
+            c.execute("UPDATE players SET games_played = games_played + 1 WHERE user_id = ?", (player.user_id,))
+            if player.user_id == winner.user_id:
+                c.execute("UPDATE players SET wins = wins + 1 WHERE user_id = ?", (player.user_id,))
         conn.commit()
         conn.close()
         
         del active_rooms[room_id]
-        await query.edit_message_text(f"🏆 Winner: {RACES[winner['race']]['name']}", parse_mode="HTML")
+        await query.edit_message_text(f"🏆 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
         return
     
     await query.edit_message_text(f"✅ Joined! {len(active_rooms[room_id]['players'])}/4", parse_mode="HTML")
-
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
 # =============================================================================
