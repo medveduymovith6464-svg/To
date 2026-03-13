@@ -363,7 +363,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     room_id = f"room_{random.randint(1000, 9999)}"
-    active_rooms[room_id] = {"players": []}
+    active_rooms[room_id] = {"players": [], "waiting": []}
     keyboard = [[InlineKeyboardButton("🔌 Join", callback_data=f"join_{room_id}")]]
     await query.edit_message_text(f"🏆 <b>Room {room_id}</b>\n\n0/2 players", 
                                   reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
@@ -376,6 +376,10 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if room_id not in active_rooms:
         await query.edit_message_text("❌ Room expired")
         return
+    
+    # Добавляем в список ожидающих
+    if query.from_user.id not in active_rooms[room_id]["waiting"]:
+        active_rooms[room_id]["waiting"].append(query.from_user.id)
     
     # Показываем кнопки с расами
     keyboard = []
@@ -409,9 +413,13 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("You already chose a race!", show_alert=True)
             return
     
-    # Создаём игрока
+    # Создаём игрока с ресурсами
     player = Player(query.from_user.id, race_id)
     active_rooms[room_id]["players"].append(player)
+    
+    # Убираем из ожидающих
+    if query.from_user.id in active_rooms[room_id]["waiting"]:
+        active_rooms[room_id]["waiting"].remove(query.from_user.id)
     
     # Если собралось 2 игрока
     if len(active_rooms[room_id]["players"]) == 2:
@@ -443,27 +451,28 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
         
+        # Всем ожидающим говорим что игра началась
+        for waiting_id in active_rooms[room_id]["waiting"]:
+            try:
+                await context.bot.send_message(
+                    chat_id=waiting_id,
+                    text="❌ Game already started with 2 players!",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+        
         del active_rooms[room_id]
         await query.edit_message_text(f"🎮 Game Over! Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
         return
     
-    # Если игрок 1 выбрал, ждём игрока 2
-    # Сообщение для игрока, который только что выбрал
-    waiting_text = f"✅ You joined as {RACES[race_id]['name']}!\n\n⏳ Waiting for other player...\nPlayers: {len(active_rooms[room_id]['players'])}/2"
+    # Если первый игрок выбрал, ждём второго
+    waiting_text = f"✅ You joined as {RACES[race_id]['name']}!\n\n⏳ Waiting for other player...\nPlayers: 1/2"
     await query.edit_message_text(waiting_text, parse_mode="HTML")
     
     # Отправляем уведомление второму игроку, что его ход
-    # В реальности кнопки выбора расы уже висят у второго игрока из join_room
-    # Но можно отправить ему напоминание
-    other_player_id = None
-    for p in active_rooms[room_id]["players"]:
-        if p.user_id != query.from_user.id:
-            other_player_id = p.user_id
-            break
-    
-    if other_player_id:
+    for waiting_id in active_rooms[room_id]["waiting"]:
         try:
-            # Показываем второму игроку кнопки выбора расы (если их нет)
             keyboard = []
             for rid in RACES:
                 keyboard.append([InlineKeyboardButton(
@@ -472,7 +481,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )])
             
             await context.bot.send_message(
-                chat_id=other_player_id,
+                chat_id=waiting_id,
                 text="🎭 <b>Your turn to choose race!</b>",
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML"
