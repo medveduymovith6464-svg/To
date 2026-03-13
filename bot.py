@@ -407,31 +407,34 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     player = Player(query.from_user.id, race_id)
     active_rooms[room_id]["players"].append(player)   
     
-    if len(active_rooms[room_id]["players"]) == 4:
-        winner = random.choice(active_rooms[room_id]["players"])
-        
-        # Сохраняем в базу
-        conn = sqlite3.connect("game.db")
-        c = conn.cursor()
-        
-        # Преобразуем игроков в словари для JSON
-        players_data = [p.to_dict() for p in active_rooms[room_id]["players"]]
-        
-        c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-                  (datetime.now(), winner.race_id, winner.user_id, json.dumps(players_data), room_id))
-        
-        for player in active_rooms[room_id]["players"]:
-            c.execute("UPDATE players SET games_played = games_played + 1 WHERE user_id = ?", (player.user_id,))
-            if player.user_id == winner.user_id:
-                c.execute("UPDATE players SET wins = wins + 1 WHERE user_id = ?", (player.user_id,))
-        conn.commit()
-        conn.close()
-        
-        del active_rooms[room_id]
-        await query.edit_message_text(f"🏆 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
-        return
+# ... предыдущий код ...
+
+if len(active_rooms[room_id]["players"]) == 4:
+    winner = random.choice(active_rooms[room_id]["players"])
     
-    # Создаём игровое меню
+    # Сохраняем в базу
+    conn = sqlite3.connect("game.db")
+    c = conn.cursor()
+    
+    # Вставляем игру
+    c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
+              (datetime.now(), winner.race_id, winner.user_id, json.dumps([p.to_dict() for p in active_rooms[room_id]["players"]]), room_id))
+    
+# Получаем ID игры
+game_id = c.lastrowid
+
+for player in active_rooms[room_id]["players"]:
+    c.execute("UPDATE players SET games_played = games_played + 1 WHERE user_id = ?", (player.user_id,))
+    if player.user_id == winner.user_id:
+        c.execute("UPDATE players SET wins = wins + 1 WHERE user_id = ?", (player.user_id,))
+conn.commit()
+conn.close()
+
+del active_rooms[room_id]
+await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
+return
+
+# 👇 ТУТ ИГРОВОЕ МЕНЮ (ЕСЛИ НЕ 4 ИГРОКА)
 game_keyboard = [
     [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
      InlineKeyboardButton("⚒ Build", callback_data="build")],
@@ -448,7 +451,45 @@ await query.edit_message_text(
 )
 
 # =============================================================================
-# БЛОК: 9.5 МОЙ ГОРОД (показывает ресурсы игрока)
+# БЛОК 9.5: МОЙ ГОРОД (показывает ресурсы игрока)
+# =============================================================================
+async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    # Находим игрока в активной комнате (если есть)
+    user_id = query.from_user.id
+    player = None
+    
+    for room in active_rooms.values():
+        for p in room["players"]:
+            if p.user_id == user_id:
+                player = p
+                break
+        if player:
+            break
+    
+    if not player:
+        await query.edit_message_text("❌ You're not in a game!")
+        return
+    
+    text = f"🏛 <b>Your City</b>\n\n"
+    text += f"🍞 Food: {player.food}/{player.food_limit}\n"
+    text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
+    text += f"⚒ Labor: {player.labor}/{player.labor_limit}\n"
+    text += f"❤️ Health: {player.health}/{player.health_limit}\n"
+    text += f"🧠 Intelligence: {player.intelligence}/{player.intelligence_limit}\n"
+    text += f"😔 Depression: {player.depression}\n"
+    text += f"😈 Hate: {player.hate}\n"
+    text += f"💰 Money: {player.money}\n"
+    text += f"📦 Materials: {player.materials}\n"
+    text += f"👥 Population: {player.population}\n"
+    text += f"🏗 Buildings: {len(player.buildings)}"
+    
+    await query.edit_message_text(text, parse_mode="HTML"
+) 
+# =============================================================================
+# БЛОК: МОЙ ГОРОД (показывает ресурсы игрока)
 # =============================================================================
 async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -481,21 +522,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 Population: {player.population}\n"
     text += f"🏗 Buildings: {len(player.buildings)}"
     
-    # Создаём игровое меню
-game_keyboard = [
-    [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
-     InlineKeyboardButton("⚒ Build", callback_data="build")],
-    [InlineKeyboardButton("⚔️ War", callback_data="war"),
-     InlineKeyboardButton("📜 Events", callback_data="events")]
-]
-
-await query.edit_message_text(
-    f"✅ You joined as {RACES[race_id]['name']}!\n\n"
-    f"Players: {len(active_rooms[room_id]['players'])}/4\n\n"
-    f"<b>Game Menu:</b>",
-    reply_markup=InlineKeyboardMarkup(game_keyboard),
-    parse_mode="HTML"
-)
+    await query.edit_message_text(text, parse_mode="HTML")
 
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
