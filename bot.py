@@ -639,6 +639,8 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
+    app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
+    app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
     app.run_polling() 
 if __name__ == "__main__":
     import threading
