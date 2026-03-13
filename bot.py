@@ -367,6 +367,8 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "players": [],
         "creator": query.from_user.id,
         "stage": "waiting"  # waiting, picking, playing
+        "choices": {},        # ← СЮДА ЗАПЯТУЮ!
+        "allowed": [query.from_user.id]
     }
     
     # Кнопка Join для второго игрока
