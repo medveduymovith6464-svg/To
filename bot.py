@@ -415,26 +415,15 @@ if len(active_rooms[room_id]["players"]) == 2:
     # Сохраняем в базу
     conn = sqlite3.connect("game.db")
     c = conn.cursor()
+    c.execute(...)
+    conn.commit()
+    conn.close()
     
-    # Вставляем игру
-    c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-              (datetime.now(), winner.race_id, winner.user_id, json.dumps([p.to_dict() for p in active_rooms[room_id]["players"]]), room_id))
-    
-# Получаем ID игры
-game_id = c.lastrowid
+    del active_rooms[room_id]
+    await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
+    return  # ← функция заканчивается ТОЛЬКО здесь
 
-for player in active_rooms[room_id]["players"]:
-    c.execute("UPDATE players SET games_played = games_played + 1 WHERE user_id = ?", (player.user_id,))
-    if player.user_id == winner.user_id:
-        c.execute("UPDATE players SET wins = wins + 1 WHERE user_id = ?", (player.user_id,))
-conn.commit()
-conn.close()
-
-del active_rooms[room_id]
-await query.edit_message_text(f"🎮 Winner: {RACES[winner.race_id]['name']}", parse_mode="HTML")
-return
-
-# 👇 ТУТ ИГРОВОЕ МЕНЮ (ЕСЛИ НЕ 4 ИГРОКА)
+# 👇 А ЭТО ИГРОВОЕ МЕНЮ ДЛЯ ТЕХ, КТО ЕЩЁ В ИГРЕ (НЕ 4 ИГРОКА)
 game_keyboard = [
     [InlineKeyboardButton("🏛 My City", callback_data="my_city"),
      InlineKeyboardButton("⚒ Build", callback_data="build")],
