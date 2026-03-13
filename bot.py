@@ -39,18 +39,196 @@ def init_db():
 init_db()
 
 # =============================================================================
-# БЛОК 3: РАСЫ (все данные о расах, можешь менять цифры)
+# БЛОК 3: РАСЫ (со всеми лимитами)
 # =============================================================================
 RACES = {
-    "human": {"name": "👤 Human", "emoji": "👤"},
-    "elf": {"name": "🧝 Elf", "emoji": "🧝"},
-    "demon": {"name": "👹 Demon", "emoji": "👹"},
-    "beast": {"name": "🐺 Beastfolk", "emoji": "🐺"}
+    "human": {
+        "name": "👤 Human",
+        "emoji": "👤",
+        "food_limit": 1000,
+        "faith_limit": 1000,
+        "labor_limit": 1000,
+        "health_limit": 1000,
+        "bloodlust": 500,  # НЕ улучшается
+        "intelligence_limit": 1000,
+        "special": "+20% population growth"
+    },
+    "elf": {
+        "name": "🧝 Elf",
+        "emoji": "🧝",
+        "food_limit": 2000,
+        "faith_limit": 2000,
+        "labor_limit": 2000,
+        "health_limit": 1000,  # исправлено!
+        "bloodlust": 500,
+        "intelligence_limit": 1000,
+        "special": "5% chance to steal enemy's turn"
+    },
+    "demon": {
+        "name": "👹 Demon",
+        "emoji": "👹",
+        "food_limit": 500,
+        "faith_limit": 500,
+        "labor_limit": 500,
+        "health_limit": 5000,
+        "bloodlust": 5000,
+        "intelligence_limit": 500,
+        "special": "No reproduction"
+    },
+    "beast": {
+        "name": "🐺 Beastfolk",
+        "emoji": "🐺",
+        "food_limit": 500,
+        "faith_limit": 0,  # не улучшается
+        "labor_limit": 500,
+        "health_limit": 2500,
+        "bloodlust": 2500,
+        "intelligence_limit": 0,  # не улучшается
+        "special": "10% rebellion chance"
+    }
 }
 
 # =============================================================================
+# БЛОК 3.5: КЛАСС ИГРОКА (ресурсы, лимиты, улучшения)
+# =============================================================================
+class Player:
+    def __init__(self, user_id, race_id):
+        self.user_id = user_id
+        self.race_id = race_id
+        race = RACES[race_id]
+        
+        # Текущие значения (начинаем с макс)
+        self.food = race["food_limit"]
+        self.faith = race["faith_limit"]
+        self.labor = race["labor_limit"]
+        self.health = race["health_limit"]
+        self.intelligence = race["intelligence_limit"]
+        self.bloodlust = race["bloodlust"]  # не меняется
+        
+        # Лимиты (можно увеличивать)
+        self.food_limit = race["food_limit"]
+        self.faith_limit = race["faith_limit"]
+        self.labor_limit = race["labor_limit"]
+        self.health_limit = race["health_limit"]
+        self.intelligence_limit = race["intelligence_limit"]
+        
+        # Специальные ресурсы
+        self.depression = 0
+        self.hate = 0
+        self.money = 0
+        self.materials = 0
+        self.dev_points = 500  # очки развития за раунд
+        
+        # Население
+        self.population = 100
+        self.population_growth = 0  # % от домов
+        
+        # Хранилище (общее, не меняется)
+        self.storage_limit = 10000
+        self.storage_used = 0
+        
+        # Постройки
+        self.buildings = []
+    
+    def upgrade(self, stat, amount):
+        """Улучшает лимит ресурса"""
+        if stat == "food" and self.food_limit < 10000:
+            self.food_limit += amount
+            return True
+        elif stat == "faith" and self.faith_limit < 10000 and self.faith_limit != 0:
+            self.faith_limit += amount
+            return True
+        elif stat == "labor" and self.labor_limit < 10000:
+            self.labor_limit += amount
+            return True
+        elif stat == "health" and self.health_limit < 10000:
+            self.health_limit += amount
+            return True
+        elif stat == "intelligence" and self.intelligence_limit < 10000 and self.intelligence_limit != 0:
+            self.intelligence_limit += amount
+            return True
+        return False
+    
+    def add_building(self, building):
+        """Добавляет здание"""
+        self.buildings.append(building)
+        # Тут эффекты зданий
+        if building == "house":
+            self.population_growth += 1  # +1% за раунд
+        elif building == "farm":
+            self.food += 50  # сразу +50 еды
+        elif building == "church":
+            self.faith += 50
+        # и так далее
+    
+    def calculate_food_consumption(self):
+        """Сколько еды съедают юниты за раунд"""
+        if self.race_id == "demon":
+            return 0  # демоны не едят
+        elif self.race_id == "elf":
+            return self.population // 15  # 15 юнитов = 1 еда
+        elif self.race_id == "beast":
+            return self.population // 5   # 5 юнитов = 1 еда
+        else:  # human
+            return self.population // 10  # 10 юнитов = 1 еда
+    
+    def apply_depression(self):
+        """Применяет эффект депрессии"""
+        if self.depression > 0:
+            self.food = max(0, self.food - self.depression)
+            self.faith = max(0, self.faith - self.depression)
+            self.labor = max(0, self.labor - self.depression)
+            self.health = max(0, self.health - self.depression)
+            self.money = max(0, self.money - self.depression)
+            self.materials = max(0, self.materials - self.depression)
+    
+    def cure_depression(self, amount):
+        """Лечит депрессию (тратит веру+еду+труд)"""
+        cost = amount
+        if self.faith >= cost and self.food >= cost and self.labor >= cost:
+            self.faith -= cost
+            self.food -= cost
+            self.labor -= cost
+            self.depression = max(0, self.depression - amount)
+            return True
+        return False
+    
+    def add_hate(self, amount):
+        """Добавляет ненависть"""
+        self.hate += amount
+    
+    def get_crit_chance(self):
+        """Шанс крита от ненависти"""
+        return self.hate / 100  # 100 hate = 1%
+    
+    def get_intelligence_crit(self):
+        """Шанс крита от интеллекта"""
+        return self.intelligence / 100  # 100 int = 1%
+    
+    def to_dict(self):
+        """Для сохранения в JSON"""
+        return {
+            "user_id": self.user_id,
+            "race": self.race_id,
+            "food": self.food, "food_limit": self.food_limit,
+            "faith": self.faith, "faith_limit": self.faith_limit,
+            "labor": self.labor, "labor_limit": self.labor_limit,
+            "health": self.health, "health_limit": self.health_limit,
+            "intelligence": self.intelligence, "intelligence_limit": self.intelligence_limit,
+            "bloodlust": self.bloodlust,
+            "depression": self.depression,
+            "hate": self.hate,
+            "money": self.money,
+            "materials": self.materials,
+            "dev_points": self.dev_points,
+            "population": self.population,
+            "population_growth": self.population_growth,
+            "buildings": self.buildings
+        }
+# =============================================================================
 # БЛОК 4: ВСПОМОГАТЕЛЬНЫЙ ФЛАСК (только чтобы Render не ругался)
 # =============================================================================
+
 app = Flask(__name__)
 @app.route('/')
 def index(): return '🤖 Bot is running!'
@@ -212,8 +390,8 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Room expired")
         return
     
-    active_rooms[room_id]["players"].append({"user_id": query.from_user.id, "race": race_id})
-    
+    player = Player(query.from_user.id, race_id)
+    active_rooms[room_id]["players"].append(player)   
     if len(active_rooms[room_id]["players"]) == 4:
         winner = random.choice(active_rooms[room_id]["players"])
         
