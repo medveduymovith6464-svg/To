@@ -363,7 +363,11 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     room_id = f"room_{random.randint(1000, 9999)}"
-    active_rooms[room_id] = {"players": [], "waiting": []}
+    active_rooms[room_id] = {
+        "players": [], 
+        "waiting": [],
+        "creator": query.from_user.id
+    }
     keyboard = [[InlineKeyboardButton("🔌 Join", callback_data=f"join_{room_id}")]]
     await query.edit_message_text(f"🏆 <b>Room {room_id}</b>\n\n0/2 players", 
                                   reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
@@ -377,7 +381,18 @@ async def join_room(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Room expired")
         return
     
-    # Добавляем в список ожидающих
+    # Проверяем, не полная ли комната
+    if len(active_rooms[room_id]["players"]) >= 2:
+        await query.edit_message_text("❌ Room is full!")
+        return
+    
+    # Проверяем, не в игре ли уже этот игрок
+    for p in active_rooms[room_id]["players"]:
+        if p.user_id == query.from_user.id:
+            await query.answer("You're already in this game!", show_alert=True)
+            return
+    
+    # Добавляем в список ожидающих (только если ещё не в игре)
     if query.from_user.id not in active_rooms[room_id]["waiting"]:
         active_rooms[room_id]["waiting"].append(query.from_user.id)
     
@@ -412,6 +427,11 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if p.user_id == query.from_user.id:
             await query.answer("You already chose a race!", show_alert=True)
             return
+    
+    # Проверяем, не полная ли комната
+    if len(active_rooms[room_id]["players"]) >= 2:
+        await query.edit_message_text("❌ Game already full!")
+        return
     
     # Создаём игрока с ресурсами
     player = Player(query.from_user.id, race_id)
@@ -456,7 +476,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(
                     chat_id=waiting_id,
-                    text="❌ Game already started with 2 players!",
+                    text="❌ Game already started!",
                     parse_mode="HTML"
                 )
             except:
@@ -470,24 +490,25 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     waiting_text = f"✅ You joined as {RACES[race_id]['name']}!\n\n⏳ Waiting for other player...\nPlayers: 1/2"
     await query.edit_message_text(waiting_text, parse_mode="HTML")
     
-    # Отправляем уведомление второму игроку, что его ход
+    # Отправляем уведомление ВСЕМ ожидающим (кроме текущего)
     for waiting_id in active_rooms[room_id]["waiting"]:
-        try:
-            keyboard = []
-            for rid in RACES:
-                keyboard.append([InlineKeyboardButton(
-                    RACES[rid]["name"], 
-                    callback_data=f"race_{room_id}_{rid}"
-                )])
-            
-            await context.bot.send_message(
-                chat_id=waiting_id,
-                text="🎭 <b>Your turn to choose race!</b>",
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="HTML"
-            )
-        except:
-            pass
+        if waiting_id != query.from_user.id:
+            try:
+                keyboard = []
+                for rid in RACES:
+                    keyboard.append([InlineKeyboardButton(
+                        RACES[rid]["name"], 
+                        callback_data=f"race_{room_id}_{rid}"
+                    )])
+                
+                await context.bot.send_message(
+                    chat_id=waiting_id,
+                    text="🎭 <b>Your turn to choose race!</b>",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="HTML"
+                )
+            except:
+                pass
 # =============================================================================
 # БЛОК 9.5: МОЙ ГОРОД (показывает ресурсы игрока)
 # =============================================================================
