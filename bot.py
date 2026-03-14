@@ -520,12 +520,13 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 👇 ЕСЛИ ЭТО СОЗДАТЕЛЬ
     if query.from_user.id == active_rooms[room_id]["creator"]:
-        # Просто говорим, что ждём
-        await query.edit_message_text(
+        # Сохраняем ID сообщения создателя, чтобы потом удалить
+        sent_msg = await query.edit_message_text(
             f"✅ You chose {RACES[race_id]['name']}!\n\n"
             f"⏳ Waiting for second player...",
             parse_mode="HTML"
         )
+        active_rooms[room_id]["creator_msg_id"] = sent_msg.message_id
         
         # Кнопка Play для всех
         play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
@@ -539,54 +540,111 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # 👇 ЕСЛИ ЭТО ВТОРОЙ ИГРОК
-    # Второй игрок выбрал расу - теперь стартуем игру
-    await start_game(room_id, context, update.effective_chat.id)
+    # Удаляем сообщение создателя (Waiting...)
+    if "creator_msg_id" in active_rooms[room_id]:
+        try:
+            await context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=active_rooms[room_id]["creator_msg_id"]
+            )
+        except:
+            pass
     
-    # Удаляем старое сообщение с выбором расы (оно больше не нужно)
+    # Удаляем сообщение с выбором расы у второго
     await query.message.delete()
+    
+    # Запускаем игру
+    await start_game(room_id, context, update.effective_chat.id)
 
 async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает список зданий для постройки"""
     query = update.callback_query
     await query.answer()
     
-    data = query.data.split("_")
-    room_id = "_".join(data[1:])
+    # Парсим данные: build_room123_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-1])
+    target_user_id = int(parts[-1])
+    
+    # Проверка: нажимает ли владелец кнопки
+    if query.from_user.id != target_user_id:
+        return
     
     if room_id not in active_rooms:
         return
     
-    user_id = query.from_user.id
+    # Находим игрока
     player = None
     for p in active_rooms[room_id].get("players", []):
-        if p.user_id == user_id:
+        if p.user_id == target_user_id:
             player = p
             break
     
     if not player:
         return
     
-    if user_id not in active_rooms[room_id].get("allowed", []):
+    # Проверка очереди
+    if target_user_id not in active_rooms[room_id].get("allowed", []):
         return
     
-    # Кнопки зданий
+    # Создаем кнопки зданий
     buttons = []
     for b_id, b_data in BUILDINGS.items():
         cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
         buttons.append([InlineKeyboardButton(
             f"{b_data['name']} | {cost_color} {b_data['cost']}💰",
-            callback_data=f"build_{room_id}_{b_id}"
+            callback_data=f"construct_{room_id}_{b_id}_{target_user_id}"
         )])
     
-    nav_buttons = [
-        [InlineKeyboardButton("🔙 Back to Game", callback_data=f"back_to_game_{room_id}")]
-    ]
+    # Кнопка назад в игровое меню
+    buttons.append([InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}_{target_user_id}")])
     
     await query.edit_message_text(
-        f"🏗️ **Construction Menu**\n"
-        f"Your Dev Points: {player.dev_points}💰\n"
-        f"Choose building:",
-        reply_markup=InlineKeyboardMarkup(buttons + nav_buttons),
+        f"🏗️ **Construction Menu**\nYour Dev Points: {player.dev_points}💰",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="HTML"
+    )
+
+async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    # Парсим данные: construct_room123_house_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-2])
+    building_id = parts[-2]
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    if target_user_id not in active_rooms[room_id].get("allowed", []):
+        return
+    
+    building = BUILDINGS.get(building_id)
+    if not building:
+        return
+    
+    if player.dev_points < building['cost']:
+        return
+    
+    # Строим
+    player.dev_points -= building['cost']
+    player.add_building(building_id)
+    
+    await query.edit_message_text(
+        f"✅ **{building['name']} built!**\nRemaining Dev Points: {player.dev_points}",
         parse_mode="HTML"
     )
 
@@ -607,12 +665,12 @@ async def start_game(room_id, context, chat_id):
     active_rooms[room_id]["turn"] = 1
     active_rooms[room_id]["current_player"] = players[0].user_id
     
-    # 👇 ОДНО СООБЩЕНИЕ: кто играет и чей ход
+    # 👇 КНОПКИ С ID ИГРОКА
     game_keyboard = [
         [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{players[0].user_id}"),
-         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-        [InlineKeyboardButton("⚔️ War", callback_data=f"war_menu_{room_id}"),
-         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{players[0].user_id}")],
+        [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{players[0].user_id}"),
+         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{players[0].user_id}")]
     ]
     
     await context.bot.send_message(
@@ -708,56 +766,70 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    data = query.data.split("_")
-    room_id = "_".join(data[1:])
+    # Парсим callback_data: endturn_room123_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-1])
+    target_user_id = int(parts[-1])
     
+    # Проверка: нажимает ли владелец кнопки
+    if query.from_user.id != target_user_id:
+        return
+    
+    # Проверка: существует ли комната
     if room_id not in active_rooms:
         return
     
-    user_id = query.from_user.id
+    # Находим игрока
     player = None
     for p in active_rooms[room_id].get("players", []):
-        if p.user_id == user_id:
+        if p.user_id == target_user_id:
             player = p
             break
     
     if not player:
         return
     
-    if user_id not in active_rooms[room_id].get("allowed", []):
+    # Проверка: его ли сейчас ход
+    if target_user_id not in active_rooms[room_id].get("allowed", []):
         return
     
+    # Находим другого игрока
     other_player = None
     for p in active_rooms[room_id]["players"]:
-        if p.user_id != user_id:
+        if p.user_id != target_user_id:
             other_player = p
             break
     
-    if other_player:
-        active_rooms[room_id]["allowed"] = [other_player.user_id]
-        active_rooms[room_id]["current_player"] = other_player.user_id
-        
-        if await check_game_over(room_id, context):
-            return
-        
-        chat_id = active_rooms[room_id]["chat_id"]
-        
-        # Новое меню для следующего игрока
-        game_keyboard = [
-            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{other_player.user_id}"),  # ← other_player!
-             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{other_player.user_id}")],     # ← other_player!
-            [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{other_player.user_id}"),          # ← other_player!
-             InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{other_player.user_id}")] # ← other_player!
-        ]
-        
-        # Редактируем старое сообщение, а не шлём новое
-        await query.edit_message_text(
-            text=f"🔄 **Turn ended!**\n\n"
-                 f"👤 {user_id} finished.\n"
-                 f"🎮 Now {other_player.user_id}'s turn!",
-            reply_markup=InlineKeyboardMarkup(game_keyboard),
-            parse_mode="HTML"
-        )
+    if not other_player:
+        return
+    
+    # Меняем очередь
+    active_rooms[room_id]["allowed"] = [other_player.user_id]
+    active_rooms[room_id]["current_player"] = other_player.user_id
+    
+    # Проверяем, не закончилась ли игра
+    if await check_game_over(room_id, context):
+        return
+    
+    # ID чата для публичных сообщений
+    chat_id = active_rooms[room_id]["chat_id"]
+    
+    # Новое меню для следующего игрока
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{other_player.user_id}")],
+        [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{other_player.user_id}")]
+    ]
+    
+    # Редактируем текущее сообщение, показывая, чей теперь ход
+    await query.edit_message_text(
+        text=f"🔄 **Turn ended!**\n\n"
+             f"👤 {target_user_id} finished.\n"
+             f"🎮 Now **{other_player.user_id}'s** turn!",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
+        parse_mode="HTML"
+    )
 
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Возвращает в главное игровое меню"""
@@ -880,26 +952,29 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    data = query.data.split("_")
-    room_id = "_".join(data[1:])
+    # Парсим данные из callback: mycity_room123_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-1])
+    target_user_id = int(parts[-1])
+    
+    # Проверка: нажимает ли владелец кнопки
+    if query.from_user.id != target_user_id:
+        return
     
     if room_id not in active_rooms:
         return
     
-    user_id = query.from_user.id
+    # Ищем игрока в комнате
     player = None
-    
-    # Ищем игрока с таким ID
     for p in active_rooms[room_id].get("players", []):
-        if p.user_id == user_id:
+        if p.user_id == target_user_id:
             player = p
             break
     
-    # Если это не его город - просто игнор (НИКАКИХ СООБЩЕНИЙ!)
-    if player is None:
+    if not player:
         return
     
-    # Показываем город
+    # Формируем текст
     text = f"🏛 <b>Your City</b>\n\n"
     text += f"🍞 Food: {player.food}/{player.food_limit}\n"
     text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
@@ -913,8 +988,8 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 Population: {player.population}\n"
     text += f"🏗 Buildings: {len(player.buildings)}"
     
-    # Кнопка назад
-    back_keyboard = [[InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}")]]
+    # Кнопка назад в игровое меню
+    back_keyboard = [[InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
     
     await query.edit_message_text(
         text,
@@ -970,6 +1045,8 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
     app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
     app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
+    app.add_handler(CallbackQueryHandler(construct, pattern="construct_"))
+    app.add_handler(CallbackQueryHandler(war, pattern="war_"))
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
