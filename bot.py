@@ -929,24 +929,24 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data.split("_")
     room_id = "_".join(data[1:])
     
-    # Если комнаты нет - просто игнорим
+    # Если комнаты нет - игнорим
     if room_id not in active_rooms:
         return
     
     user_id = query.from_user.id
-    
-    # Находим игрока
     player = None
+    
+    # Поиск игрока в комнате (исправлено!)
     for p in active_rooms[room_id].get("players", []):
-        if p.user_id == user_id:
+        if hasattr(p, 'user_id') and p.user_id == user_id:
             player = p
             break
     
-    # Если игрока нет в игре - игнорим (НИКАКИХ СООБЩЕНИЙ!)
-    if not player:
+    # Если игрока нет в игре - игнорим
+    if player is None:
         return
     
-    # Показываем город (город можно смотреть всем, не только в свой ход)
+    # Показываем город
     text = f"🏛 <b>Your City</b>\n\n"
     text += f"🍞 Food: {player.food}/{player.food_limit}\n"
     text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
