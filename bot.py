@@ -576,11 +576,13 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data.split("_")
     room_id = "_".join(data[1:])
     
+    # Если комнаты нет - просто игнорим
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room expired")
         return
     
     user_id = query.from_user.id
+    
+    # Если игрока нет в игре - игнорим
     player = None
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == user_id:
@@ -588,24 +590,27 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if not player:
-        await query.edit_message_text("❌ You're not in this game!")
         return
     
+    # Если не его очередь - игнорим
     if user_id not in active_rooms[room_id].get("allowed", []):
-        await query.answer("❌ It's not your turn!", show_alert=True)
         return
     
-    # Кнопки для всех зданий
+    # 👇 ДАЛЬШЕ ОСНОВНОЙ КОД build_menu
+    BUILDINGS = {
+        "house": {"name": "🏠 House", "cost": 50},
+        "farm": {"name": "🌱 Farm", "cost": 100},
+        "church": {"name": "⛪ Church", "cost": 1000},
+    }
+    
     buttons = []
     for b_id, b_data in BUILDINGS.items():
-        # Проверяем, хватает ли очков
         cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
         buttons.append([InlineKeyboardButton(
             f"{b_data['name']} | {cost_color} {b_data['cost']}💰",
             callback_data=f"build_{room_id}_{b_id}"
         )])
     
-    # Добавляем кнопки навигации
     nav_buttons = [
         [InlineKeyboardButton("🔙 Back to Game", callback_data=f"back_to_game_{room_id}")],
         [InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_build_{room_id}")]
@@ -614,7 +619,6 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"🏗️ **Construction Menu**\n"
         f"Your Dev Points: {player.dev_points}💰\n"
-        f"🟢 = can afford, 🔴 = too expensive\n\n"
         f"Choose building:",
         reply_markup=InlineKeyboardMarkup(buttons + nav_buttons),
         parse_mode="HTML"
@@ -659,20 +663,19 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершает ход текущего игрока и передаёт очередь"""
     query = update.callback_query
     await query.answer()
     
     data = query.data.split("_")
     room_id = "_".join(data[1:])
     
+    # Если комнаты нет - игнорим
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room expired")
         return
     
     user_id = query.from_user.id
     
-    # Проверяем, что игрок вообще в игре
+    # Если игрока нет в игре - игнорим
     player = None
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == user_id:
@@ -680,12 +683,13 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if not player:
-        await query.edit_message_text("❌ You're not in this game!")
         return
     
-    # Передаём ход другому игроку
-    current_allowed = active_rooms[room_id].get("allowed", [])
+    # Если не его очередь - игнорим
+    if user_id not in active_rooms[room_id].get("allowed", []):
+        return
     
+    # 👇 ДАЛЬШЕ ОСНОВНОЙ КОД end_turn
     # Находим другого игрока
     other_player = None
     for p in active_rooms[room_id]["players"]:
@@ -710,13 +714,19 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         
+        # Возвращаем игровое меню
+        game_keyboard = [
+            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
+             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+            [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+        ]
+        
         await query.edit_message_text(
-            f"✅ Turn ended. It's now {other_player.user_id}'s turn.",
+            f"✅ Turn ended.",
+            reply_markup=InlineKeyboardMarkup(game_keyboard),
             parse_mode="HTML"
         )
-    else:
-        await query.answer("No other player found!", show_alert=True)
-
+        
 async def start_game(room_id, context):
     if room_id not in active_rooms:
         return
