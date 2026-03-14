@@ -930,10 +930,22 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = "_".join(data[1:])
     
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room not found!")  # ВРЕМЕННО
+        await query.edit_message_text("❌ Room not found!")
         return
     
-    await query.edit_message_text("✅ Комната найдена!")
+    # 👇 ДОБАВЛЯЕМ ПОИСК ИГРОКА
+    user_id = query.from_user.id
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == user_id:
+            player = p
+            break
+    
+    if not player:
+        await query.edit_message_text("❌ Player not found in this game!")
+        return
+    
+    await query.edit_message_text(f"✅ Игрок найден! Dev points: {player.dev_points}")
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
