@@ -497,27 +497,25 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = "_".join(parts[1:-1])
     
     if room_id not in active_rooms:
-        return  # игнорим, если комнаты нет
+        return
     
     # 🔥 ПРОВЕРКА: только допущенные могут выбирать
     if query.from_user.id not in active_rooms[room_id].get("allowed", []):
         return
     
-    # Проверяем, не выбрал ли уже
     if query.from_user.id in active_rooms[room_id]["choices"]:
         return
     
     # Сохраняем выбор
     active_rooms[room_id]["choices"][query.from_user.id] = race_id
     
-    # 👇 СОЗДАЁМ ИГРОКА И ДОБАВЛЯЕМ В КОМНАТУ
+    # 👇 СОЗДАЁМ ИГРОКА
     player = Player(query.from_user.id, race_id)
     if "players" not in active_rooms[room_id]:
         active_rooms[room_id]["players"] = []
     active_rooms[room_id]["players"].append(player)
-    # 👆
     
-    # Убираем этого игрока из допущенных
+    # Убираем из допущенных
     if query.from_user.id in active_rooms[room_id]["allowed"]:
         active_rooms[room_id]["allowed"].remove(query.from_user.id)
     
@@ -538,14 +536,12 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         
-        # Кнопка Play для всех
+        # 👇 ТОЛЬКО КНОПКА PLAY, БЕЗ ЛИШНИХ ТЕКСТОВ
         play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
         
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"🎮 <b>A game is waiting!</b>\n\n"
-                 f"Host chose {RACES[race_id]['name']}\n"
-                 f"Click PLAY to join!",
+            text=f"🎮 A game is waiting! Click PLAY to join!",
             reply_markup=InlineKeyboardMarkup(play_keyboard),
             parse_mode="HTML"
         )
