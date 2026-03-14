@@ -498,21 +498,25 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = "_".join(parts[1:-1])
     
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room expired")
-        return
+        return  # игнорим, если комнаты нет
     
     # 🔥 ПРОВЕРКА: только допущенные могут выбирать
     if query.from_user.id not in active_rooms[room_id].get("allowed", []):
-        await query.answer("❌ It's not your turn!", show_alert=True)
         return
     
     # Проверяем, не выбрал ли уже
     if query.from_user.id in active_rooms[room_id]["choices"]:
-        await query.answer("You already chose!", show_alert=True)
         return
     
     # Сохраняем выбор
     active_rooms[room_id]["choices"][query.from_user.id] = race_id
+    
+    # 👇 СОЗДАЁМ ИГРОКА И ДОБАВЛЯЕМ В КОМНАТУ
+    player = Player(query.from_user.id, race_id)
+    if "players" not in active_rooms[room_id]:
+        active_rooms[room_id]["players"] = []
+    active_rooms[room_id]["players"].append(player)
+    # 👆
     
     # Убираем этого игрока из допущенных
     if query.from_user.id in active_rooms[room_id]["allowed"]:
@@ -520,7 +524,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Если это создатель
     if query.from_user.id == active_rooms[room_id]["creator"]:
-        # 👇 МЕНЯЕМ СООБЩЕНИЕ, А НЕ ШЛЁМ НОВОЕ
         game_keyboard = [
             [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
              InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
@@ -536,7 +539,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         
-        # Кнопка Play для всех (отдельным сообщением)
+        # Кнопка Play для всех
         play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
         
         await context.bot.send_message(
@@ -550,7 +553,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Если это второй игрок
-    # 👇 ТОЖЕ МЕНЯЕМ СООБЩЕНИЕ
     game_keyboard = [
         [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
          InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
@@ -567,6 +569,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     # Запускаем игру
+    await start_game(room_id, context)
 
 async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает список зданий для постройки"""
@@ -885,7 +888,6 @@ async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = query.data.replace("cancel_", "")
     
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room already closed")
         return
     
     if query.from_user.id != active_rooms[room_id]["creator"]:
@@ -901,7 +903,6 @@ async def back_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = query.data.replace("back_", "")
     
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room expired")
         return
     
     active_rooms[room_id]["stage"] = "waiting"
