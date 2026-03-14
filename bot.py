@@ -586,6 +586,9 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if target_user_id not in active_rooms[room_id].get("allowed", []):
         return
     
+    # 🔥 ФИКС: Добавляем принт для проверки
+    print(f"✅ build_menu вызвана для игрока {target_user_id}")
+    
     # Создаем кнопки зданий
     buttons = []
     for b_id, b_data in BUILDINGS.items():
