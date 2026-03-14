@@ -921,10 +921,19 @@ async def back_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================================================================
 # БЛОК 9.5: МОЙ ГОРОД (показывает ресурсы игрока)
 # =============================================================================
+
 async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("✅ Кнопка My City работает!")
+    
+    data = query.data.split("_")
+    room_id = "_".join(data[1:])
+    
+    if room_id not in active_rooms:
+        await query.edit_message_text("❌ Room not found!")  # ВРЕМЕННО
+        return
+    
+    await query.edit_message_text("✅ Комната найдена!")
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
