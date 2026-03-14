@@ -499,7 +499,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if room_id not in active_rooms:
         return
     
-    # 🔥 ПРОВЕРКА: только допущенные могут выбирать
     if query.from_user.id not in active_rooms[room_id].get("allowed", []):
         return
     
@@ -509,7 +508,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Сохраняем выбор
     active_rooms[room_id]["choices"][query.from_user.id] = race_id
     
-    # 👇 СОЗДАЁМ ИГРОКА
+    # Создаём игрока
     player = Player(query.from_user.id, race_id)
     if "players" not in active_rooms[room_id]:
         active_rooms[room_id]["players"] = []
@@ -519,24 +518,16 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.from_user.id in active_rooms[room_id]["allowed"]:
         active_rooms[room_id]["allowed"].remove(query.from_user.id)
     
-    # Если это создатель
+    # 👇 ЕСЛИ ЭТО СОЗДАТЕЛЬ
     if query.from_user.id == active_rooms[room_id]["creator"]:
-        game_keyboard = [
-            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
-             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-            [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
-        ]
-        
+        # Просто говорим, что ждём
         await query.edit_message_text(
             f"✅ You chose {RACES[race_id]['name']}!\n\n"
-            f"🎮 **Game Menu**\n"
-            f"Players: 1/2\n"
-            f"Waiting for someone to join...",
-            reply_markup=InlineKeyboardMarkup(game_keyboard),
+            f"⏳ Waiting for second player...",
             parse_mode="HTML"
         )
         
-        # 👇 ТОЛЬКО КНОПКА PLAY, БЕЗ ЛИШНИХ ТЕКСТОВ
+        # Кнопка Play для всех
         play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
         
         await context.bot.send_message(
@@ -547,24 +538,12 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Если это второй игрок
-    game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
-         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-        [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
-    ]
-    
-    await query.edit_message_text(
-        f"✅ You chose {RACES[race_id]['name']}!\n\n"
-        f"🎮 **Game Menu**\n"
-        f"Players: 2/2\n"
-        f"Game started!",
-        reply_markup=InlineKeyboardMarkup(game_keyboard),
-        parse_mode="HTML"
-    )
-    
-    # Запускаем игру
+    # 👇 ЕСЛИ ЭТО ВТОРОЙ ИГРОК
+    # Второй игрок выбрал расу - теперь стартуем игру
     await start_game(room_id, context, update.effective_chat.id)
+    
+    # Удаляем старое сообщение с выбором расы (оно больше не нужно)
+    await query.message.delete()
 
 async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает список зданий для постройки"""
@@ -611,8 +590,8 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
-async def start_game(room_id, context, chat_id):  # ← ДОБАВИЛИ chat_id
-    """Запускает игровой цикл (первый ход)"""
+async def start_game(room_id, context, chat_id):
+    """Запускает игру после выбора обоих игроков"""
     if room_id not in active_rooms:
         return
     
@@ -628,17 +607,7 @@ async def start_game(room_id, context, chat_id):  # ← ДОБАВИЛИ chat_id
     active_rooms[room_id]["turn"] = 1
     active_rooms[room_id]["current_player"] = players[0].user_id
     
-    # 👇 ВСЁ В ОБЩИЙ ЧАТ
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"⚔️ **GAME STARTED!**\n\n"
-             f"👤 Player 1: {players[0].race_id}\n"
-             f"👤 Player 2: {players[1].race_id}\n"
-             f"Round 1 begins!\n"
-             f"🎮 {players[0].user_id}'s turn!",
-        parse_mode="HTML"
-    )
-    
+    # 👇 ОДНО СООБЩЕНИЕ: кто играет и чей ход
     game_keyboard = [
         [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{players[0].user_id}"),
          InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
@@ -648,7 +617,10 @@ async def start_game(room_id, context, chat_id):  # ← ДОБАВИЛИ chat_id
     
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"🎮 **{players[0].user_id}'s turn**",
+        text=f"⚔️ **GAME STARTED!**\n\n"
+             f"👤 Player 1: {players[0].race_id}\n"
+             f"👤 Player 2: {players[1].race_id}\n"
+             f"🎮 {players[0].user_id}'s turn!",
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
@@ -763,31 +735,26 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if other_player:
         active_rooms[room_id]["allowed"] = [other_player.user_id]
+        active_rooms[room_id]["current_player"] = other_player.user_id
         
         if await check_game_over(room_id, context):
             return
         
-        chat_id = active_rooms[room_id]["chat_id"]  # ← БЕРЁМ ИЗ КОМНАТЫ
+        chat_id = active_rooms[room_id]["chat_id"]
         
-        # Сообщение о смене хода
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"🔄 **Turn ended!**\n\n"
-                 f"👤 {user_id} finished their turn.\n"
-                 f"🎮 Now it's {other_player.user_id}'s turn!",
-            parse_mode="HTML"
-        )
-        
+        # Новое меню для следующего игрока
         game_keyboard = [
-            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{other_player.user_id}"),
-             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-            [InlineKeyboardButton("⚔️ War", callback_data=f"war_menu_{room_id}"),
-             InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{other_player.user_id}"),  # ← other_player!
+             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{other_player.user_id}")],     # ← other_player!
+            [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{other_player.user_id}"),          # ← other_player!
+             InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{other_player.user_id}")] # ← other_player!
         ]
         
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"🎮 **{other_player.user_id}'s turn**",
+        # Редактируем старое сообщение, а не шлём новое
+        await query.edit_message_text(
+            text=f"🔄 **Turn ended!**\n\n"
+                 f"👤 {user_id} finished.\n"
+                 f"🎮 Now {other_player.user_id}'s turn!",
             reply_markup=InlineKeyboardMarkup(game_keyboard),
             parse_mode="HTML"
         )
@@ -816,10 +783,12 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Игровое меню
+    # Игровое меню для ТЕКУЩЕГО игрока
     game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
-         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-        [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{user_id}"),  # ← user_id!
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{user_id}")],    # ← user_id!
+        [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{user_id}"),        # ← user_id!
+         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{user_id}")] # ← user_id!
     ]
     
     await query.edit_message_text(
