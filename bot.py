@@ -582,9 +582,9 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
-    # Проверка очереди
-    if target_user_id not in active_rooms[room_id].get("allowed", []):
-        return
+    # ✅ УБИРАЕМ ПРОВЕРКУ ОЧЕРЕДИ — она не нужна для открытия меню!
+    # if target_user_id not in active_rooms[room_id].get("allowed", []):
+    #     return
     
     # Создаем кнопки зданий
     buttons = []
@@ -604,12 +604,10 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
-
 async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Парсим данные: construct_room123_house_456
     parts = query.data.split("_")
     room_id = "_".join(parts[1:-2])
     building_id = parts[-2]
@@ -630,6 +628,7 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
+    # ✅ ВОТ ЗДЕСЬ ПРОВЕРКА ОЧЕРЕДИ НУЖНА!
     if target_user_id not in active_rooms[room_id].get("allowed", []):
         return
     
