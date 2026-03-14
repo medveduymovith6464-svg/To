@@ -524,11 +524,11 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Если это создатель
     if query.from_user.id == active_rooms[room_id]["creator"]:
-        game_keyboard = [
-            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
-             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-            [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
-        ]
+game_keyboard = [
+    [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),  # ← добавляем ID
+     InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+    [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+]
         
         await query.edit_message_text(
             f"✅ You chose {RACES[race_id]['name']}!\n\n"
@@ -936,17 +936,17 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     player = None
     
-    # Ищем игрока с ТОЧНО таким же user_id
+    # Ищем игрока с таким ID
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == user_id:
             player = p
             break
     
-    # Если игрок не найден или это не его город - игнорим
+    # Если это не его город - просто игнор (НИКАКИХ СООБЩЕНИЙ!)
     if player is None:
         return
     
-    # Показываем ТОЛЬКО его город
+    # Показываем город
     text = f"🏛 <b>Your City</b>\n\n"
     text += f"🍞 Food: {player.food}/{player.food_limit}\n"
     text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
