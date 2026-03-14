@@ -1015,7 +1015,6 @@ def run_bot():
     app.add_handler(CommandHandler("stats", my_stats))
     app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
     app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
-    app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
     app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
