@@ -1072,21 +1072,32 @@ def run_bot():
     app.add_handler(CommandHandler("report", report))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("stats", my_stats))
-    app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
-    app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
-    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
+    
+    # Сначала самые длинные/точные паттерны
     app.add_handler(CallbackQueryHandler(construct, pattern="construct_"))
+    app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
+    
+    # Потом основные игровые действия
+    app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
     app.add_handler(CallbackQueryHandler(war, pattern="war_"))
+    app.add_handler(CallbackQueryHandler(end_turn, pattern="endturn_"))
+    
+    # Потом выбор расы и язык
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
+    
+    # Потом системные (новая игра, статистика)
+    app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
+    app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
+    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
+    
+    # Самые общие — в конце
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
-    app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
-    app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
-    app.add_handler(CallbackQueryHandler(end_turn, pattern="endturn_"))
-    app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))  # ← ЭТО!
+    app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
     app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
+   
     app.run_polling()
 if __name__ == "__main__":
     import threading
