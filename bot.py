@@ -522,37 +522,37 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.from_user.id in active_rooms[room_id]["allowed"]:
         active_rooms[room_id]["allowed"].remove(query.from_user.id)
     
-    # Если это создатель
-if query.from_user.id == active_rooms[room_id]["creator"]:
-    game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
-         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-        [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
-    ]
+    # --- БЛОК ДЛЯ СОЗДАТЕЛЯ ---
+    if query.from_user.id == active_rooms[room_id]["creator"]:
+        game_keyboard = [
+            [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
+             InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+            [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+        ]
+        
+        await query.edit_message_text(
+            f"✅ You chose {RACES[race_id]['name']}!\n\n"
+            f"🎮 **Game Menu**\n"
+            f"Players: 1/2\n"
+            f"Waiting for someone to join...",
+            reply_markup=InlineKeyboardMarkup(game_keyboard),
+            parse_mode="HTML"
+        )
+        
+        # Кнопка Play для всех
+        play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
+        
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"🎮 <b>A game is waiting!</b>\n\n"
+                 f"Host chose {RACES[race_id]['name']}\n"
+                 f"Click PLAY to join!",
+            reply_markup=InlineKeyboardMarkup(play_keyboard),
+            parse_mode="HTML"
+        )
+        return
     
-    await query.edit_message_text(
-        f"✅ You chose {RACES[race_id]['name']}!\n\n"
-        f"🎮 **Game Menu**\n"
-        f"Players: 1/2\n"
-        f"Waiting for someone to join...",
-        reply_markup=InlineKeyboardMarkup(game_keyboard),
-        parse_mode="HTML"
-    )
-    
-    # Кнопка Play для всех
-    play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
-    
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f"🎮 <b>A game is waiting!</b>\n\n"
-             f"Host chose {RACES[race_id]['name']}\n"
-             f"Click PLAY to join!",
-        reply_markup=InlineKeyboardMarkup(play_keyboard),
-        parse_mode="HTML"
-    )
-    return
-    
-    # Если это второй игрок
+    # --- БЛОК ДЛЯ ВТОРОГО ИГРОКА ---
     game_keyboard = [
         [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
          InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
