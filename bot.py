@@ -560,12 +560,11 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Парсим данные: build_room123_456
     parts = query.data.split("_")
     room_id = "_".join(parts[1:-1])
     target_user_id = int(parts[-1])
     
-    # Проверка: нажимает ли владелец кнопки
+    # Проверка владельца
     if query.from_user.id != target_user_id:
         return
     
@@ -582,11 +581,11 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
-    # ✅ УБИРАЕМ ПРОВЕРКУ ОЧЕРЕДИ — она не нужна для открытия меню!
+    # ✅ УБИРАЕМ ПРОВЕРКУ ОЧЕРЕДИ
     # if target_user_id not in active_rooms[room_id].get("allowed", []):
     #     return
     
-    # Создаем кнопки зданий
+    # Кнопки зданий
     buttons = []
     for b_id, b_data in BUILDINGS.items():
         cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
@@ -595,7 +594,6 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"construct_{room_id}_{b_id}_{target_user_id}"
         )])
     
-    # Кнопка назад в игровое меню
     buttons.append([InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}_{target_user_id}")])
     
     await query.edit_message_text(
@@ -866,18 +864,23 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    room_id = query.data.replace("back_to_game_", "")
+    # Парсим данные: back_to_game_room123_456
+    parts = query.data.split("_")
+    # Отбрасываем "back", "to", "game" — берём всё после 3-го элемента
+    room_id = "_".join(parts[3:-1])
+    target_user_id = int(parts[-1])
     
-    # Если комнаты нет - игнорим
+    # Проверка: нажимает ли владелец кнопки
+    if query.from_user.id != target_user_id:
+        return
+    
     if room_id not in active_rooms:
         return
     
-    user_id = query.from_user.id
-    
-    # Если игрока нет в игре - игнорим
+    # Находим игрока
     player = None
     for p in active_rooms[room_id].get("players", []):
-        if p.user_id == user_id:
+        if p.user_id == target_user_id:
             player = p
             break
     
@@ -885,12 +888,11 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Игровое меню
-    # Игровое меню для ТЕКУЩЕГО игрока
     game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{user_id}"),  # ← user_id!
-         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{user_id}")],    # ← user_id!
-        [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{user_id}"),        # ← user_id!
-         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{user_id}")] # ← user_id!
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{target_user_id}")]
     ]
     
     await query.edit_message_text(
