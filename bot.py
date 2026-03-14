@@ -936,13 +936,13 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     player = None
     
-    # Поиск игрока в комнате (исправлено!)
+    # ПРОСТОЙ поиск игрока (без выкрутасов)
     for p in active_rooms[room_id].get("players", []):
-        if hasattr(p, 'user_id') and p.user_id == user_id:
+        if p.user_id == user_id:
             player = p
             break
     
-    # Если игрока нет в игре - игнорим
+    # Если игрока нет - просто выход (НИКАКИХ СООБЩЕНИЙ!)
     if player is None:
         return
     
