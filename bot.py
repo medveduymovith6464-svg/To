@@ -567,62 +567,128 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     # Запускаем игру
-    await start_game(room_id, context)
-
-async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data.split("_")
-    room_id = "_".join(data[1:])
-    
-    # Если комнаты нет - просто игнорим
+async def start_game(room_id, context):
+    """Запускает игровой цикл (первый ход)"""
     if room_id not in active_rooms:
         return
     
-    user_id = query.from_user.id
-    
-    # Если игрока нет в игре - игнорим
-    player = None
-    for p in active_rooms[room_id].get("players", []):
-        if p.user_id == user_id:
-            player = p
-            break
-    
-    if not player:
+    if len(active_rooms[room_id]["choices"]) != 2:
         return
     
-    # Если не его очередь - игнорим
-    if user_id not in active_rooms[room_id].get("allowed", []):
-        return
+    # Создаём игроков (сохраняем в комнату)
+    players = []
+    for user_id, race_id in active_rooms[room_id]["choices"].items():
+        player = Player(user_id, race_id)
+        players.append(player)
     
-    # 👇 ДАЛЬШЕ ОСНОВНОЙ КОД build_menu
-    BUILDINGS = {
-        "house": {"name": "🏠 House", "cost": 50},
-        "farm": {"name": "🌱 Farm", "cost": 100},
-        "church": {"name": "⛪ Church", "cost": 1000},
-    }
+    active_rooms[room_id]["players"] = players
+    active_rooms[room_id]["turn"] = 1  # Счётчик раундов
+    active_rooms[room_id]["current_player"] = players[0].user_id  # Первый ходит
     
-    buttons = []
-    for b_id, b_data in BUILDINGS.items():
-        cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
-        buttons.append([InlineKeyboardButton(
-            f"{b_data['name']} | {cost_color} {b_data['cost']}💰",
-            callback_data=f"build_{room_id}_{b_id}"
-        )])
+    # Оповещаем игроков о начале
+    for player in players:
+        await context.bot.send_message(
+            chat_id=player.user_id,
+            text=f"🎮 **Game started!**\n"
+                 f"Round 1 begins.\n"
+                 f"{'✅ Your turn now!' if player.user_id == players[0].user_id else '⏳ Wait for your turn...'}",
+            parse_mode="HTML"
+        )
     
-    nav_buttons = [
-        [InlineKeyboardButton("🔙 Back to Game", callback_data=f"back_to_game_{room_id}")],
-        [InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_build_{room_id}")]
+    # Показываем игровое меню первому игроку
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+        [InlineKeyboardButton("⚔️ War", callback_data=f"war_menu_{room_id}"),
+         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
     ]
     
-    await query.edit_message_text(
-        f"🏗️ **Construction Menu**\n"
-        f"Your Dev Points: {player.dev_points}💰\n"
-        f"Choose building:",
-        reply_markup=InlineKeyboardMarkup(buttons + nav_buttons),
+    # Отправляем меню только тому, чей ход
+    await context.bot.send_message(
+        chat_id=players[0].user_id,
+        text="🎮 **Your turn!**",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
+
+async def check_game_over(room_id, context):
+    """Проверяет, не закончилась ли игра (только для активных игроков)"""
+    if room_id not in active_rooms:
+        return False
+    
+    # Берём ТОЛЬКО тех, кто уже в игре (выбрали расу и живы)
+    players = active_rooms[room_id].get("players", [])
+    
+    # Если ещё нет 2 игроков - игра не началась
+    if len(players) != 2:
+        return False
+    
+    alive_players = []
+    
+    for player in players:
+        # Проверяем, жив ли игрок
+        if player.population <= 0:
+            continue  # Мёртв
+        if player.food <= 0 and player.race_id != "demon":
+            continue  # Умер с голоду (кроме демонов)
+        if player.depression >= 1000:
+            continue  # Психологическая смерть
+        
+        alive_players.append(player)
+    
+    # Если остался только один живой
+    if len(alive_players) == 1:
+        winner = alive_players[0]
+        
+        # Отправляем результат ТОЛЬКО живым
+        for player in players:
+            try:
+                if player.user_id == winner.user_id:
+                    await context.bot.send_message(
+                        chat_id=player.user_id,
+                        text=f"🎉 **YOU WIN!**\n"
+                             f"Your civilization survives!",
+                        parse_mode="HTML"
+                    )
+                else:
+                    # Проигравший уже мёртв, но отправляем ему уведомление
+                    await context.bot.send_message(
+                        chat_id=player.user_id,
+                        text=f"💔 **Game Over**\n"
+                             f"Your civilization has fallen.",
+                        parse_mode="HTML"
+                    )
+            except:
+                pass
+        
+        # Сохраняем в базу
+        conn = sqlite3.connect("game.db")
+        c = conn.cursor()
+        players_data = [{"user_id": p.user_id, "race": p.race_id, "alive": (p in alive_players)} for p in players]
+        c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
+                  (datetime.now(), winner.race_id, winner.user_id, json.dumps(players_data), room_id))
+        conn.commit()
+        conn.close()
+        
+        del active_rooms[room_id]
+        return True
+    
+    # Если оба мертвы (ничья)
+    if len(alive_players) == 0 and len(players) == 2:
+        for player in players:
+            try:
+                await context.bot.send_message(
+                    chat_id=player.user_id,
+                    text=f"💀 **Draw!**\n"
+                         f"Both civilizations destroyed each other.",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+        del active_rooms[room_id]
+        return True
+    
+    return False
 
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -662,6 +728,10 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if other_player:
         # Меняем допущенного
         active_rooms[room_id]["allowed"] = [other_player.user_id]
+
+        # Проверяем, не закончилась ли игра
+    if await check_game_over(room_id, context):
+        return
         
         # Уведомляем обоих
         await context.bot.send_message(
@@ -689,7 +759,8 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def back_to_g
+ame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Возвращает в главное игровое меню"""
     query = update.callback_query
     await query.answer()
