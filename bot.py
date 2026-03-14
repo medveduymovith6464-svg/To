@@ -623,44 +623,6 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(buttons + nav_buttons),
         parse_mode="HTML"
     )
-    
-async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    room_id = query.data.replace("play_", "")
-    
-    if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room expired")
-        return
-    
-    # Проверяем, не полная ли комната
-    if len(active_rooms[room_id]["choices"]) >= 2:
-        await query.edit_message_text("❌ Game already full!")
-        return
-    
-    # Проверяем, не создатель ли это
-    if query.from_user.id == active_rooms[room_id]["creator"]:
-        await query.answer("You can't join your own game!", show_alert=True)
-        return
-    
-    # Добавляем второго игрока в допущенные
-    if "allowed" not in active_rooms[room_id]:
-        active_rooms[room_id]["allowed"] = []
-    active_rooms[room_id]["allowed"].append(query.from_user.id)
-    
-    # Показываем второму игроку выбор расы
-    race_keyboard = []
-    for race_id in RACES:
-        race_keyboard.append([InlineKeyboardButton(
-            RACES[race_id]["name"], 
-            callback_data=f"race_{room_id}_{race_id}"
-        )])
-    
-    await query.edit_message_text(
-        f"🎭 <b>Choose your race!</b>",
-        reply_markup=InlineKeyboardMarkup(race_keyboard),
-        parse_mode="HTML"
-    )
 
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -726,6 +688,81 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(game_keyboard),
             parse_mode="HTML"
         )
+
+async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возвращает в главное игровое меню"""
+    query = update.callback_query
+    await query.answer()
+    
+    room_id = query.data.replace("back_to_game_", "")
+    
+    # Если комнаты нет - игнорим
+    if room_id not in active_rooms:
+        return
+    
+    user_id = query.from_user.id
+    
+    # Если игрока нет в игре - игнорим
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    # Игровое меню
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+        [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+    ]
+    
+    await query.edit_message_text(
+        "🎮 **Game Menu**",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
+        parse_mode="HTML"
+    )
+    
+async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    room_id = query.data.replace("play_", "")
+    
+    if room_id not in active_rooms:
+        await query.edit_message_text("❌ Room expired")
+        return
+    
+    # Проверяем, не полная ли комната
+    if len(active_rooms[room_id]["choices"]) >= 2:
+        await query.edit_message_text("❌ Game already full!")
+        return
+    
+    # Проверяем, не создатель ли это
+    if query.from_user.id == active_rooms[room_id]["creator"]:
+        await query.answer("You can't join your own game!", show_alert=True)
+        return
+    
+    # Добавляем второго игрока в допущенные
+    if "allowed" not in active_rooms[room_id]:
+        active_rooms[room_id]["allowed"] = []
+    active_rooms[room_id]["allowed"].append(query.from_user.id)
+    
+    # Показываем второму игроку выбор расы
+    race_keyboard = []
+    for race_id in RACES:
+        race_keyboard.append([InlineKeyboardButton(
+            RACES[race_id]["name"], 
+            callback_data=f"race_{room_id}_{race_id}"
+        )])
+    
+    await query.edit_message_text(
+        f"🎭 <b>Choose your race!</b>",
+        reply_markup=InlineKeyboardMarkup(race_keyboard),
+        parse_mode="HTML"
+    )
+
         
 async def start_game(room_id, context):
     if room_id not in active_rooms:
