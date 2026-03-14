@@ -759,8 +759,7 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-async def back_to_g
-ame(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Возвращает в главное игровое меню"""
     query = update.callback_query
     await query.answer()
@@ -833,53 +832,6 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(race_keyboard),
         parse_mode="HTML"
     )
-
-        
-async def start_game(room_id, context):
-    if room_id not in active_rooms:
-        return
-    
-    if len(active_rooms[room_id]["choices"]) != 2:
-        return
-    
-    # Создаём игроков
-    players = []
-    player_objects = []
-    for user_id, race_id in active_rooms[room_id]["choices"].items():
-        player = Player(user_id, race_id)
-        players.append({"user_id": user_id, "race": race_id})
-        player_objects.append(player)
-    
-    # Определяем победителя (пока рандом)
-    winner = random.choice(players)
-    
-    # Отправляем результат
-    for player in player_objects:
-        try:
-            if player.user_id == winner["user_id"]:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"🎉 <b>YOU WIN!</b>",
-                    parse_mode="HTML"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"💔 <b>You lose...</b>",
-                    parse_mode="HTML"
-                )
-        except:
-            pass
-    
-    # Сохраняем в базу
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-              (datetime.now(), winner["race"], winner["user_id"], json.dumps(players), room_id))
-    conn.commit()
-    conn.close()
-    
-    del active_rooms[room_id]
 
 async def cancel_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
