@@ -831,6 +831,36 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    # Парсим callback_data: war_room123_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-1])
+    target_user_id = int(parts[-1])
+    
+    # Проверка: нажимает ли владелец кнопки
+    if query.from_user.id != target_user_id:
+        return
+    
+    # Проверка: существует ли комната
+    if room_id not in active_rooms:
+        return
+    
+    # Проверка: его ли сейчас ход
+    if target_user_id not in active_rooms[room_id].get("allowed", []):
+        return
+    
+    # Отправляем временное сообщение (потом заменится на реальную войну)
+    await query.edit_message_text(
+        text=f"⚔️ **War is not implemented yet!**\n\n"
+             f"Stay tuned for future updates.\n"
+             f"Click 'Back' to return to the game menu.",
+        parse_mode="HTML"
+    )
+
+
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Возвращает в главное игровое меню"""
     query = update.callback_query
