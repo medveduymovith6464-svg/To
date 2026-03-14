@@ -787,8 +787,41 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
-    # Проверка: его ли сейчас ход
-    if target_user_id not in active_rooms[room_id].get("allowed", []):
+    # ✅ ПОКАЗЫВАЕМ ПОДТВЕРЖДЕНИЕ
+    confirm_keyboard = [
+        [InlineKeyboardButton("✅ Yes", callback_data=f"confirm_endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton("❌ No", callback_data=f"cancel_endturn_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}_{target_user_id}")]
+    ]
+    
+    await query.edit_message_text(
+        text=f"⚠️ **Are you sure you want to end your turn?**\n\n"
+             f"Once you end your turn, you won't be able to take any more actions until your next turn.",
+        reply_markup=InlineKeyboardMarkup(confirm_keyboard),
+        parse_mode="HTML"
+    )
+
+async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение завершения хода"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Парсим: confirm_endturn_room123_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[2:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    if not player:
         return
     
     # Находим другого игрока
@@ -809,9 +842,6 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await check_game_over(room_id, context):
         return
     
-    # ID чата для публичных сообщений
-    chat_id = active_rooms[room_id]["chat_id"]
-    
     # Новое меню для следующего игрока
     game_keyboard = [
         [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{other_player.user_id}"),
@@ -820,11 +850,39 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{other_player.user_id}")]
     ]
     
-    # Редактируем текущее сообщение, показывая, чей теперь ход
     await query.edit_message_text(
         text=f"🔄 **Turn ended!**\n\n"
              f"👤 {target_user_id} finished.\n"
              f"🎮 Now **{other_player.user_id}'s** turn!",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
+        parse_mode="HTML"
+    )
+
+async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена завершения хода"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Парсим: cancel_endturn_room123_456
+    parts = query.data.split("_")
+    room_id = "_".join(parts[2:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    if room_id not in active_rooms:
+        return
+    
+    # Просто возвращаем игровое меню
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton("⚔️ War", callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}_{target_user_id}")]
+    ]
+    
+    await query.edit_message_text(
+        "🎮 **Game Menu**",
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
@@ -846,18 +904,16 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if room_id not in active_rooms:
         return
     
-    # Проверка: его ли сейчас ход
-    if target_user_id not in active_rooms[room_id].get("allowed", []):
-        return
+    # Кнопка "Назад" в игровое меню
+    back_keyboard = [[InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
     
     # Отправляем временное сообщение (потом заменится на реальную войну)
     await query.edit_message_text(
         text=f"⚔️ **War is not implemented yet!**\n\n"
-             f"Stay tuned for future updates.\n"
-             f"Click 'Back' to return to the game menu.",
+             f"Stay tuned for future updates.",
+        reply_markup=InlineKeyboardMarkup(back_keyboard),
         parse_mode="HTML"
     )
-
 
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Возвращает в главное игровое меню"""
@@ -1085,6 +1141,8 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(end_turn, pattern="endturn_"))
     
     # Потом выбор расы и язык
+    app.add_handler(CallbackQueryHandler(confirm_endturn, pattern="confirm_endturn_"))
+    app.add_handler(CallbackQueryHandler(cancel_endturn, pattern="cancel_endturn_"))
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
