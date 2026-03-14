@@ -524,11 +524,11 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Если это создатель
     if query.from_user.id == active_rooms[room_id]["creator"]:
-game_keyboard = [
-    [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),  # ← добавляем ID
-     InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
-    [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
-]
+    game_keyboard = [
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),  # ← добавляем ID
+         InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
+        [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
+    ]
         
         await query.edit_message_text(
             f"✅ You chose {RACES[race_id]['name']}!\n\n"
