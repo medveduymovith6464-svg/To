@@ -523,21 +523,21 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_rooms[room_id]["allowed"].remove(query.from_user.id)
     
     # Если это создатель
-    if query.from_user.id == active_rooms[room_id]["creator"]:
-    game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),  # ← добавляем ID
+if query.from_user.id == active_rooms[room_id]["creator"]:
+    game_keyboard = [  # ← ТЕПЕРЬ С ОТСТУПОМ!
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
          InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
         [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
     ]
-        
-        await query.edit_message_text(
-            f"✅ You chose {RACES[race_id]['name']}!\n\n"
-            f"🎮 **Game Menu**\n"
-            f"Players: 1/2\n"
-            f"Waiting for someone to join...",
-            reply_markup=InlineKeyboardMarkup(game_keyboard),
-            parse_mode="HTML"
-        )
+    
+    await query.edit_message_text(
+        f"✅ You chose {RACES[race_id]['name']}!\n\n"
+        f"🎮 **Game Menu**\n"
+        f"Players: 1/2\n"
+        f"Waiting for someone to join...",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
+        parse_mode="HTML"
+    )
         
         # Кнопка Play для всех
         play_keyboard = [[InlineKeyboardButton("🎮 Play", callback_data=f"play_{room_id}")]]
@@ -554,7 +554,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Если это второй игрок
     game_keyboard = [
-        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}"),
+        [InlineKeyboardButton("🏛 My City", callback_data=f"mycity_{room_id}_{query.from_user.id}"),
          InlineKeyboardButton("⚒ Build", callback_data=f"build_{room_id}")],
         [InlineKeyboardButton("⏭ End Turn", callback_data=f"endturn_{room_id}")]
     ]
