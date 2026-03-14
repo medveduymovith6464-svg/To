@@ -819,22 +819,27 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Находим игрока в активной комнате (если есть)
-    user_id = query.from_user.id
-    player = None
+    # Получаем room_id из callback_data (mycity_room123)
+    data = query.data.split("_")
+    room_id = "_".join(data[1:])
     
-    for room in active_rooms.values():
-        for p in room["players"]:
-            if p.user_id == user_id:
-                player = p
-                break
-        if player:
-            break
-    
-    if not player:
-        await query.edit_message_text("❌ You're not in a game!")
+    # Если комнаты нет - просто игнорим
+    if room_id not in active_rooms:
         return
     
+    # Находим игрока
+    user_id = query.from_user.id
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == user_id:
+            player = p
+            break
+    
+    # Если игрока нет в игре - игнорим
+    if not player:
+        return
+    
+    # Показываем город (город можно смотреть всем, не только в свой ход)
     text = f"🏛 <b>Your City</b>\n\n"
     text += f"🍞 Food: {player.food}/{player.food_limit}\n"
     text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
@@ -848,7 +853,15 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 Population: {player.population}\n"
     text += f"🏗 Buildings: {len(player.buildings)}"
     
-    await query.edit_message_text(text, parse_mode="HTML")                                                                
+    # Кнопка назад
+    back_keyboard = [[InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(back_keyboard),
+        parse_mode="HTML"
+    )
+    
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
 # =============================================================================
@@ -901,6 +914,7 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
+    app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
     app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
     app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
     app.add_handler(CallbackQueryHandler(end_turn, pattern="endturn_"))
