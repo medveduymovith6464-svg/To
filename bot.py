@@ -929,23 +929,45 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data.split("_")
     room_id = "_".join(data[1:])
     
+    # Если комнаты нет - просто игнорим
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Room not found!")
         return
     
-    # 👇 ДОБАВЛЯЕМ ПОИСК ИГРОКА
     user_id = query.from_user.id
+    
+    # Находим игрока
     player = None
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == user_id:
             player = p
             break
     
+    # Если игрока нет в игре - игнорим (НИКАКИХ СООБЩЕНИЙ!)
     if not player:
-        await query.edit_message_text("❌ Player not found in this game!")
         return
     
-    await query.edit_message_text(f"✅ Игрок найден! Dev points: {player.dev_points}")
+    # Показываем город (город можно смотреть всем, не только в свой ход)
+    text = f"🏛 <b>Your City</b>\n\n"
+    text += f"🍞 Food: {player.food}/{player.food_limit}\n"
+    text += f"🙏 Faith: {player.faith}/{player.faith_limit}\n"
+    text += f"⚒ Labor: {player.labor}/{player.labor_limit}\n"
+    text += f"❤️ Health: {player.health}/{player.health_limit}\n"
+    text += f"🧠 Intelligence: {player.intelligence}/{player.intelligence_limit}\n"
+    text += f"😔 Depression: {player.depression}\n"
+    text += f"😈 Hate: {player.hate}\n"
+    text += f"💰 Money: {player.money}\n"
+    text += f"📦 Materials: {player.materials}\n"
+    text += f"👥 Population: {player.population}\n"
+    text += f"🏗 Buildings: {len(player.buildings)}"
+    
+    # Кнопка назад
+    back_keyboard = [[InlineKeyboardButton("🔙 Back", callback_data=f"back_to_game_{room_id}")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(back_keyboard),
+        parse_mode="HTML"
+    )
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
