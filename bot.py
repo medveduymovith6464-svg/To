@@ -567,6 +567,52 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     # Запускаем игру
+
+async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список зданий для постройки"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    room_id = "_".join(data[1:])
+    
+    if room_id not in active_rooms:
+        return
+    
+    user_id = query.from_user.id
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    if user_id not in active_rooms[room_id].get("allowed", []):
+        return
+    
+    # Кнопки зданий
+    buttons = []
+    for b_id, b_data in BUILDINGS.items():
+        cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
+        buttons.append([InlineKeyboardButton(
+            f"{b_data['name']} | {cost_color} {b_data['cost']}💰",
+            callback_data=f"build_{room_id}_{b_id}"
+        )])
+    
+    nav_buttons = [
+        [InlineKeyboardButton("🔙 Back to Game", callback_data=f"back_to_game_{room_id}")]
+    ]
+    
+    await query.edit_message_text(
+        f"🏗️ **Construction Menu**\n"
+        f"Your Dev Points: {player.dev_points}💰\n"
+        f"Choose building:",
+        reply_markup=InlineKeyboardMarkup(buttons + nav_buttons),
+        parse_mode="HTML"
+    )
+
 async def start_game(room_id, context):
     """Запускает игровой цикл (первый ход)"""
     if room_id not in active_rooms:
