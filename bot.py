@@ -1088,7 +1088,22 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("✅ Back работает!")
+    
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[3:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        await query.edit_message_text("❌ Комнаты нет")
+        return
+    
+    await query.edit_message_text(f"✅ Комната {room_id} найдена, язык {lang}")
     
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
