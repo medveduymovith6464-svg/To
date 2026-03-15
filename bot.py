@@ -646,9 +646,9 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Тексты на нужном языке
     if lang == "en":
-        success_text = f"✅ **{building['name']} built!**\nRemaining Dev Points: {player.dev_points}"
+        success_text = f"✅ <b>{building['name']} built!</b>\nRemaining Dev Points: {player.dev_points}"
     else:
-        success_text = f"✅ **{building['name']} построено!**\nОсталось очков развития: {player.dev_points}"
+        success_text = f"✅ **{building['name']} построено!</b>\nОсталось очков развития: {player.dev_points}"
     
     await query.edit_message_text(
         success_text,
@@ -677,13 +677,13 @@ async def start_game(room_id, context, chat_id):
     
     # Тексты
     if lang == "en":
-        start_text = f"⚔️ **GAME STARTED!**\n\n👤 Player 1: {players[0].race_id}\n👤 Player 2: {players[1].race_id}\n🎮 {players[0].user_id}'s turn!"
+        start_text = f"⚔️ <b>GAME STARTED!</b>\n\n👤 Player 1: {players[0].race_id}\n👤 Player 2: {players[1].race_id}\n🎮 {players[0].user_id}'s turn!"
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
     else:
-        start_text = f"⚔️ **ИГРА НАЧАЛАСЬ!**\n\n👤 Игрок 1: {players[0].race_id}\n👤 Игрок 2: {players[1].race_id}\n🎮 Ходит {players[0].user_id}!"
+        start_text = f"⚔️ <b>ИГРА НАЧАЛАСЬ!</b>\n\n👤 Игрок 1: {players[0].race_id}\n👤 Игрок 2: {players[1].race_id}\n🎮 Ходит {players[0].user_id}!"
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
@@ -810,13 +810,13 @@ async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Тексты подтверждения
     if lang == "en":
-        confirm_text = ("⚠️ **Are you sure you want to end your turn?**\n\n"
+        confirm_text = ("⚠️ <b>Are you sure you want to end your turn?</b>\n\n"
                        "Once you end your turn, you won't be able to take any more actions until your next turn.")
         yes_text = "✅ Yes"
         no_text = "❌ No"
         back_text = "🔙 Back"
     else:
-        confirm_text = ("⚠️ **Ты уверен, что хочешь закончить ход?**\n\n"
+        confirm_text = ("⚠️ <b>Ты уверен, что хочешь закончить ход?</b>\n\n"
                        "После завершения хода ты не сможешь делать действия до следующего хода.")
         yes_text = "✅ Да"
         no_text = "❌ Нет"
@@ -875,7 +875,7 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Тексты для сообщения о смене хода
     if lang == "en":
-        turn_ended_text = (f"🔄 **Turn ended!**\n\n"
+        turn_ended_text = (f"🔄 <b>Turn ended!</b>\n\n"
                           f"👤 {target_user_id} finished their turn.\n"
                           f"🎮 Now **{other_player.user_id}'s** turn!")
         my_city_text = "🏛 My City"
@@ -922,13 +922,13 @@ async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Тексты для игрового меню
     if lang == "en":
-        menu_text = "🎮 **Game Menu**"
+        menu_text = "🎮 <b>Game Menu</b>"
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
     else:
-        menu_text = "🎮 **Меню игры**"
+        menu_text = "🎮 <b>Меню игры</b>"
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
@@ -966,10 +966,10 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Тексты
     if lang == "en":
-        war_text = "⚔️ **War is not implemented yet!**\n\nStay tuned for future updates."
+        war_text = "⚔️ <b>War is not implemented yet!</b>\n\nStay tuned for future updates."
         back_text = "🔙 Back"
     else:
-        war_text = "⚔️ **Война ещё не реализована!**\n\nСледите за обновлениями."
+        war_text = "⚔️ <b>Война ещё не реализована!</b>\n\nСледите за обновлениями."
         back_text = "🔙 Назад"
     
     back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
@@ -1009,13 +1009,13 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Тексты
     if lang == "en":
-        menu_text = "🎮 **Game Menu**"
+        menu_text = "🎮 <b>Game Menu</b>"
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
     else:
-        menu_text = "🎮 **Меню игры**"
+        menu_text = "🎮 <b>**Меню игры</b>"
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
