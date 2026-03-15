@@ -670,10 +670,15 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Просто показываем, что функция вызвана
-    await query.edit_message_text("✅ construct ВЫЗВАНА!")
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
     
-    # Раскомментируй потом остальной код
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-2])
+    building_id = parts[-2]
+    target_user_id = int(parts[-1])
+    
+    await query.edit_message_text(f"✅ room_id: {room_id}, building: {building_id}, target: {target_user_id}")
 
 async def start_game(room_id, context, chat_id):
     """Запускает игру после выбора обоих игроков"""
