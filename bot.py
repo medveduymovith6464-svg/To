@@ -1111,14 +1111,32 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
-    # 👇 ТЕСТОВАЯ КЛАВИАТУРА (самая простая)
-    test_keyboard = [
-        [InlineKeyboardButton("✅ Тест", callback_data="test")]
+    # Тексты на нужном языке
+    if lang == "en":
+        my_city_text = "🏛 My City"
+        build_text = "⚒ Build"
+        war_text = "⚔️ War"
+        end_turn_text = "⏭ End Turn"
+        income_text = "📊 Income"
+    else:
+        my_city_text = "🏛 Мой город"
+        build_text = "⚒ Строить"
+        war_text = "⚔️ Война"
+        end_turn_text = "⏭ Завершить ход"
+        income_text = "📊 Доход"
+    
+    # НАСТОЯЩАЯ КЛАВИАТУРА
+    game_keyboard = [
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
     ]
     
     await query.edit_message_text(
-        "🎮 **Меню игры**",
-        reply_markup=InlineKeyboardMarkup(test_keyboard),
+        "🎮 <b>Меню игры</b>",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
     
