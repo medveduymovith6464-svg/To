@@ -597,8 +597,6 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
-    
     parts = query.data.split("_")
     room_id = "_".join(parts[1:-1])
     target_user_id = int(parts[-1])
@@ -609,6 +607,9 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if room_id not in active_rooms:
         return
     
+    # Берём язык из комнаты
+    room_lang = active_rooms[room_id].get("lang", "en")
+    
     player = None
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == target_user_id:
@@ -618,21 +619,46 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
+    # Русские названия зданий
+    building_names_ru = {
+        "house": "🏠 Дом",
+        "farm": "🌱 Ферма",
+        "sawmill": "🪵 Лесопилка",
+        "church": "⛪ Церковь",
+        "forge": "⚒ Кузница",
+        "laboratory": "🔬 Лаборатория",
+        "mine": "🕳 Шахта",
+        "tax_office": "💰 Налоговая",
+        "library": "📚 Библиотека",
+        "necropolis": "🪦 Некрополь",
+        "sacred_grove": "🌳 Священная роща",
+        "hell": "🔥 Преисподняя",
+        "bone_throne": "🦴 Костяной трон",
+        "steam_engine": "⚙ Паровая машина"
+    }
+    
     # Кнопки зданий
     buttons = []
     for b_id, b_data in BUILDINGS.items():
         cost_color = "🟢" if player.dev_points >= b_data['cost'] else "🔴"
+        
+        # Выбираем название здания
+        if room_lang == "en":
+            building_name = b_data['name']
+        else:
+            building_name = building_names_ru.get(b_id, b_data['name'])
+        
         buttons.append([InlineKeyboardButton(
-            f"{b_data['name']} | {cost_color} {b_data['cost']}💰",
+            f"{building_name} | {cost_color} {b_data['cost']}💰",
             callback_data=f"construct_{room_id}_{b_id}_{target_user_id}"
         )])
     
-    # Кнопка назад с поддержкой языка
-    back_text = "🔙 Back" if lang == "en" else "🔙 Назад"
+    # Кнопка назад
+    back_text = "🔙 Back" if room_lang == "en" else "🔙 Назад"
     buttons.append([InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")])
     
     # Заголовок меню
-    title = "🏗️ Construction Menu" if lang == "en" else "🏗️ Меню строительства"
+    title = "🏗️ Construction Menu" if room_lang == "en" else "🏗️ Меню строительства"
     
     await query.edit_message_text(
         f"{title}\nYour Dev Points: {player.dev_points}💰",
@@ -918,6 +944,20 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not other_player:
         return
     
+    # Получаем юзернеймы
+    chat_id = active_rooms[room_id]["chat_id"]
+    
+    # Функция для получения имени
+    async def get_username(user_id):
+        try:
+            chat_member = await context.bot.get_chat_member(chat_id, user_id)
+            return chat_member.user.username or chat_member.user.first_name or str(user_id)
+        except:
+            return str(user_id)
+    
+    current_name = await get_username(target_user_id)
+    next_name = await get_username(other_player.user_id)
+    
     active_rooms[room_id]["allowed"] = [other_player.user_id]
     active_rooms[room_id]["current_player"] = other_player.user_id
     
@@ -927,16 +967,16 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Тексты для сообщения о смене хода
     if lang == "en":
         turn_ended_text = (f"🔄 <b>Turn ended!</b>\n\n"
-                          f"👤 {target_user_id} finished their turn.\n"
-                          f"🎮 Now **{other_player.user_id}'s** turn!")
+                          f"👤 {current_name} finished their turn.\n"
+                          f"🎮 Now <b>{next_name}</b>'s turn!")
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
     else:
-        turn_ended_text = (f"🔄 **Ход закончен!**\n\n"
-                          f"👤 {target_user_id} завершил ход.\n"
-                          f"🎮 Теперь ходит **{other_player.user_id}**!")
+        turn_ended_text = (f"🔄 <b>Ход закончен!</b>\n\n"
+                          f"👤 {current_name} завершил ход.\n"
+                          f"🎮 Теперь ходит <b>{next_name}</b>!")
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
