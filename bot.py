@@ -1021,27 +1021,29 @@ async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if room_id not in active_rooms:
         return
     
-    # Тексты для игрового меню
+    # Тексты
     if lang == "en":
         menu_text = "🎮 <b>Game Menu</b>"
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
+        income_text = "📊 Income"
     else:
         menu_text = "🎮 <b>Меню игры</b>"
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
-        income_text = "📊 Income" if lang == "en" else "📊 Доход"
-
+        income_text = "📊 Доход"
+    
+    # ВАЖНО: используем target_user_id, а не other_player!
     game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]  # ← ВОТ ЭТА
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
     ]
     
     await query.edit_message_text(
