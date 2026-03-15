@@ -725,48 +725,54 @@ async def start_game(room_id, context, chat_id):
     if len(active_rooms[room_id]["choices"]) != 2:
         return
     
+    # Создаём игроков
     players = []
-    player_usernames = []
     for user_id, race_id in active_rooms[room_id]["choices"].items():
         player = Player(user_id, race_id)
         players.append(player)
-        
-        # Получаем юзернейм или имя
-        try:
-            chat_member = await context.bot.get_chat_member(chat_id, user_id)
-            username = chat_member.user.username or chat_member.user.first_name or str(user_id)
-        except:
-            username = str(user_id)
-        player_usernames.append(username)
     
     active_rooms[room_id]["players"] = players
     active_rooms[room_id]["turn"] = 1
     active_rooms[room_id]["current_player"] = players[0].user_id
     
-    # Определяем язык (по первому игроку)
-    lang = user_languages.get(players[0].user_id, "en")
+    # Получаем язык из комнаты
+    lang = active_rooms[room_id].get("lang", "en")
     
-    # Тексты с юзернеймами
+    # Получаем имена игроков
+    player1_name = str(players[0].user_id)
+    player2_name = str(players[1].user_id)
+    try:
+        chat_member1 = await context.bot.get_chat_member(chat_id, players[0].user_id)
+        player1_name = chat_member1.user.username or chat_member1.user.first_name or str(players[0].user_id)
+        
+        chat_member2 = await context.bot.get_chat_member(chat_id, players[1].user_id)
+        player2_name = chat_member2.user.username or chat_member2.user.first_name or str(players[1].user_id)
+    except:
+        pass
+    
+    # Тексты на нужном языке
     if lang == "en":
         start_text = (f"⚔️ <b>GAME STARTED!</b>\n\n"
-                     f"👤 Player 1: {players[0].race_id} (@{player_usernames[0]})\n"
-                     f"👤 Player 2: {players[1].race_id} (@{player_usernames[1]})\n"
-                     f"🎮 <b>{player_usernames[0]}</b>'s turn!")
+                     f"👤 Player 1: {players[0].race_id} (@{player1_name})\n"
+                     f"👤 Player 2: {players[1].race_id} (@{player2_name})\n"
+                     f"🎮 <b>{player1_name}</b>'s turn!")
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
+        income_text = "📊 Income"
     else:
         start_text = (f"⚔️ <b>ИГРА НАЧАЛАСЬ!</b>\n\n"
-                     f"👤 Игрок 1: {players[0].race_id} (@{player_usernames[0]})\n"
-                     f"👤 Игрок 2: {players[1].race_id} (@{player_usernames[1]})\n"
-                     f"🎮 Ходит <b>{player_usernames[0]}</b>!")
+                     f"👤 Игрок 1: {players[0].race_id} (@{player1_name})\n"
+                     f"👤 Игрок 2: {players[1].race_id} (@{player2_name})\n"
+                     f"🎮 Ходит <b>{player1_name}</b>!")
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
-        income_text = "📊 Income" if lang == "en" else "📊 Доход"
+        income_text = "📊 Доход"
 
+    # КЛАВИАТУРА — ВАЖНО: используем players[0].user_id, а не other_player!
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{players[0].user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{players[0].user_id}")],
