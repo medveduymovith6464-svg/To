@@ -693,7 +693,6 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
             player = p
             break
     
-    # Если игрока нет - игнор
     if not player:
         return
     
@@ -711,19 +710,20 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # СТРОИМ
     player.dev_points -= building['cost']
-    player.add_building(building_id)
+    player.buildings.append(building_id)  # ← напрямую добавляем
     
-    # Кнопка назад (только при успехе)
-    back_text = "🔙 Back to Menu" if lang == "en" else "🔙 В меню"
+    # Сообщение об успехе
+    if lang == "en":
+        text = f"✅ <b>{building['name']} built!</b>\nDev Points: {player.dev_points}"
+        back_text = "🔙 Back"
+    else:
+        text = f"✅ <b>{building['name']} построено!</b>\nОчки развития: {player.dev_points}"
+        back_text = "🔙 Назад"
+    
     back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
     
-    if lang == "en":
-        success_text = f"✅ <b>{building['name']} built!</b>\nRemaining Dev Points: {player.dev_points}"
-    else:
-        success_text = f"✅ <b>{building['name']} построено!</b>\nОсталось очков развития: {player.dev_points}"
-    
     await query.edit_message_text(
-        success_text,
+        text,
         reply_markup=InlineKeyboardMarkup(back_keyboard),
         parse_mode="HTML"
     )
