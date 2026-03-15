@@ -678,7 +678,55 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     building_id = parts[-2]
     target_user_id = int(parts[-1])
     
-    await query.edit_message_text(f"✅ room_id: {room_id}, building: {building_id}, target: {target_user_id}")
+    # Если нажал не владелец - игнор
+    if query.from_user.id != target_user_id:
+        return
+    
+    # Если комнаты нет - игнор
+    if room_id not in active_rooms:
+        return
+    
+    # Поиск игрока
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    # Если игрока нет - игнор
+    if not player:
+        return
+    
+    # Если не его ход - игнор
+    if target_user_id not in active_rooms[room_id].get("allowed", []):
+        return
+    
+    building = BUILDINGS.get(building_id)
+    if not building:
+        return
+    
+    # Если не хватает очков - игнор
+    if player.dev_points < building['cost']:
+        return
+    
+    # СТРОИМ
+    player.dev_points -= building['cost']
+    player.add_building(building_id)
+    
+    # Кнопка назад (только при успехе)
+    back_text = "🔙 Back to Menu" if lang == "en" else "🔙 В меню"
+    back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
+    
+    if lang == "en":
+        success_text = f"✅ <b>{building['name']} built!</b>\nRemaining Dev Points: {player.dev_points}"
+    else:
+        success_text = f"✅ <b>{building['name']} построено!</b>\nОсталось очков развития: {player.dev_points}"
+    
+    await query.edit_message_text(
+        success_text,
+        reply_markup=InlineKeyboardMarkup(back_keyboard),
+        parse_mode="HTML"
+    )
 
 async def start_game(room_id, context, chat_id):
     """Запускает игру после выбора обоих игроков"""
