@@ -1100,10 +1100,8 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if room_id not in active_rooms:
-        await query.edit_message_text("❌ Комнаты нет")
         return
     
-    # 👇 ДОБАВЛЯЕМ ПОИСК ИГРОКА
     player = None
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == target_user_id:
@@ -1111,10 +1109,18 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     if not player:
-        await query.edit_message_text("❌ Игрок не найден")
         return
     
-    await query.edit_message_text(f"✅ Игрок найден! Dev points: {player.dev_points}")
+    # 👇 ТЕСТОВАЯ КЛАВИАТУРА (самая простая)
+    test_keyboard = [
+        [InlineKeyboardButton("✅ Тест", callback_data="test")]
+    ]
+    
+    await query.edit_message_text(
+        "🎮 **Меню игры**",
+        reply_markup=InlineKeyboardMarkup(test_keyboard),
+        parse_mode="HTML"
+    )
     
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
