@@ -465,7 +465,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
+    creator_lang = user_languages.get(user_id, "en")  # язык создателя
     
     room_id = f"room_{random.randint(1000, 9999)}"
     
@@ -475,19 +475,20 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "stage": "picking",
         "choices": {},
         "allowed": [query.from_user.id],
-        "players": []
+        "players": [],
+        "lang": creator_lang  # сохраняем язык комнаты
     }
     
+    # Кнопки выбора расы на языке создателя
     race_keyboard = []
     for race_id in RACES:
-        # Выбираем название в зависимости от языка
-        if lang == "en":
-            race_name = RACES[race_id]["name"]  # 👈 АНГЛИЙСКИЕ НАЗВАНИЯ (Human, Elf...)
+        if creator_lang == "en":
+            race_name = RACES[race_id]["name"]  # английские названия
         else:
-            # Русские названия
+            # русские названия
             race_names = {
                 "human": "👤 Человек",
-                "elf": "🧝 Эльф", 
+                "elf": "🧝 Эльф",
                 "demon": "👹 Демон",
                 "beast": "🐺 Зверолюд"
             }
@@ -499,7 +500,7 @@ async def new_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )])
     
     # Заголовок
-    title = "🎭 Choose your race!" if lang == "en" else "🎭 Выбери свою расу!"
+    title = "🎭 Choose your race!" if creator_lang == "en" else "🎭 Выбери свою расу!"
     
     await query.edit_message_text(
         f"🏆 <b>Room {room_id}</b>\n\n"
@@ -540,11 +541,10 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 👇 ЕСЛИ ЭТО СОЗДАТЕЛЬ
     if query.from_user.id == active_rooms[room_id]["creator"]:
-        # Определяем язык создателя
-        creator_lang = user_languages.get(query.from_user.id, "en")
+        room_lang = active_rooms[room_id].get("lang", "en")
         
-        # Текст ожидания
-        if creator_lang == "en":
+        # Текст на языке комнаты
+        if room_lang == "en":
             wait_text = f"✅ You chose {RACES[race_id]['name']}!\n\n⏳ Waiting for second player..."
         else:
             race_names = {
@@ -556,17 +556,14 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
             race_name_ru = race_names.get(race_id, race_id)
             wait_text = f"✅ Ты выбрал {race_name_ru}!\n\n⏳ Ожидание второго игрока..."
         
-        sent_msg = await query.edit_message_text(
-            wait_text,
-            parse_mode="HTML"
-        )
+        sent_msg = await query.edit_message_text(wait_text, parse_mode="HTML")
         active_rooms[room_id]["creator_msg_id"] = sent_msg.message_id
         
-        # Кнопка Play для всех
-        play_text = "🎮 Play" if creator_lang == "en" else "🎮 Играть"
+        # Кнопка Play на языке комнаты
+        play_text = "🎮 Play" if room_lang == "en" else "🎮 Играть"
         play_keyboard = [[InlineKeyboardButton(play_text, callback_data=f"play_{room_id}")]]
         
-        join_text = "🎮 A game is waiting! Click PLAY to join!" if creator_lang == "en" else "🎮 Игра ждёт! Нажми ИГРАТЬ чтобы присоединиться!"
+        join_text = "🎮 A game is waiting! Click PLAY to join!" if room_lang == "en" else "🎮 Игра ждёт! Нажми ИГРАТЬ чтобы присоединиться!"
         
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -577,8 +574,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # 👇 ЕСЛИ ЭТО ВТОРОЙ ИГРОК
-    # Определяем язык второго игрока
-    second_lang = user_languages.get(query.from_user.id, "en")
+    room_lang = active_rooms[room_id].get("lang", "en")
     
     # Удаляем сообщение создателя (Waiting...)
     if "creator_msg_id" in active_rooms[room_id]:
@@ -1093,14 +1089,14 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
-    
     room_id = query.data.replace("play_", "")
     
-    # Если комнаты нет - просто игнорим
+    # Если комнаты нет - игнорим
     if room_id not in active_rooms:
         return
+    
+    # Язык комнаты (от создателя)
+    room_lang = active_rooms[room_id].get("lang", "en")
     
     # Если комната уже полная - игнорим
     if len(active_rooms[room_id]["choices"]) >= 2:
@@ -1115,11 +1111,10 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_rooms[room_id]["allowed"] = []
     active_rooms[room_id]["allowed"].append(query.from_user.id)
     
-    # Кнопки выбора расы
+    # Кнопки выбора расы на языке комнаты
     race_keyboard = []
     for race_id in RACES:
-        # Выбираем название в зависимости от языка
-        if lang == "en":
+        if room_lang == "en":
             race_name = RACES[race_id]["name"]
         else:
             race_names = {
@@ -1135,8 +1130,8 @@ async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"race_{room_id}_{race_id}"
         )])
     
-    # Заголовок
-    title = "🎭 Choose your race!" if lang == "en" else "🎭 Выбери свою расу!"
+    # Заголовок на языке комнаты
+    title = "🎭 Choose your race!" if room_lang == "en" else "🎭 Выбери свою расу!"
     
     await query.edit_message_text(
         f"{title}",
