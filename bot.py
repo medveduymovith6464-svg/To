@@ -1103,7 +1103,18 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Комнаты нет")
         return
     
-    await query.edit_message_text(f"✅ Комната {room_id} найдена, язык {lang}")
+    # 👇 ДОБАВЛЯЕМ ПОИСК ИГРОКА
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        await query.edit_message_text("❌ Игрок не найден")
+        return
+    
+    await query.edit_message_text(f"✅ Игрок найден! Dev points: {player.dev_points}")
     
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
