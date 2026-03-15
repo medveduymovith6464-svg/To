@@ -1126,11 +1126,11 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         income_text = "📊 Income" if lang == "en" else "📊 Доход"
     
     game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]  # ← ВОТ ЭТА
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
     ]
     
     await query.edit_message_text(
