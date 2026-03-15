@@ -765,12 +765,14 @@ async def start_game(room_id, context, chat_id):
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
-    
+        income_text = "📊 Income" if lang == "en" else "📊 Доход"
+
     game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{players[0].user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{players[0].user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{players[0].user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{players[0].user_id}")]
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]  # ← ВОТ ЭТА
     ]
     
     await context.bot.send_message(
@@ -981,19 +983,15 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
-    
+        income_text = "📊 Income" if lang == "en" else "📊 Доход"
+
     game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}")]
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
     ]
-    
-    await query.edit_message_text(
-        text=turn_ended_text,
-        reply_markup=InlineKeyboardMarkup(game_keyboard),
-        parse_mode="HTML"
-    )
 
 async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1024,12 +1022,14 @@ async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
-    
+        income_text = "📊 Income" if lang == "en" else "📊 Доход"
+
     game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}")]
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]  # ← ВОТ ЭТА
     ]
     
     await query.edit_message_text(
@@ -1111,12 +1111,14 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
+        income_text = "📊 Income" if lang == "en" else "📊 Доход"
     
     game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}")]
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]  # ← ВОТ ЭТА
     ]
     
     await query.edit_message_text(
