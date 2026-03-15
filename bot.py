@@ -665,72 +665,15 @@ async def build_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="HTML"
     )
+    
 async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
+    # Просто показываем, что функция вызвана
+    await query.edit_message_text("✅ construct ВЫЗВАНА!")
     
-    parts = query.data.split("_")
-    room_id = "_".join(parts[1:-2])
-    building_id = parts[-2]
-    target_user_id = int(parts[-1])
-    
-    if query.from_user.id != target_user_id:
-        return
-    
-    if room_id not in active_rooms:
-        return
-    
-    player = None
-    for p in active_rooms[room_id].get("players", []):
-        if p.user_id == target_user_id:
-            player = p
-            break
-    
-    if not player:
-        return
-    
-    if target_user_id not in active_rooms[room_id].get("allowed", []):
-        return
-    
-    building = BUILDINGS.get(building_id)
-    if not building:
-        return
-    
-    # Кнопка назад (будет использоваться при ошибках и после успеха)
-    back_text = "🔙 Back to Menu" if lang == "en" else "🔙 В меню"
-    back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
-    
-    if player.dev_points < building['cost']:
-        # Если не хватает очков
-        if lang == "en":
-            text = f"❌ <b>Not enough Dev Points!</b>\nNeed: {building['cost']}\nYou have: {player.dev_points}"
-        else:
-            text = f"❌ <b>Не хватает очков развития!</b>\nНужно: {building['cost']}\nУ тебя: {player.dev_points}"
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(back_keyboard),
-            parse_mode="HTML"
-        )
-        return
-    
-    # СТРОИМ
-    player.dev_points -= building['cost']
-    player.add_building(building_id)
-    
-    if lang == "en":
-        success_text = f"✅ <b>{building['name']} built!</b>\nRemaining Dev Points: {player.dev_points}"
-    else:
-        success_text = f"✅ <b>{building['name']} построено!</b>\nОсталось очков развития: {player.dev_points}"
-    
-    await query.edit_message_text(
-        success_text,
-        reply_markup=InlineKeyboardMarkup(back_keyboard),
-        parse_mode="HTML"
-    )
+    # Раскомментируй потом остальной код
 
 async def start_game(room_id, context, chat_id):
     """Запускает игру после выбора обоих игроков"""
