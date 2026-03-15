@@ -1086,60 +1086,9 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Возвращает в главное игровое меню"""
     query = update.callback_query
     await query.answer()
-    
-    user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
-    
-    parts = query.data.split("_")
-    room_id = "_".join(parts[3:-1])
-    target_user_id = int(parts[-1])
-    
-    if query.from_user.id != target_user_id:
-        return
-    
-    if room_id not in active_rooms:
-        return
-    
-    player = None
-    for p in active_rooms[room_id].get("players", []):
-        if p.user_id == target_user_id:
-            player = p
-            break
-    
-    if not player:
-        return
-    
-    # Тексты
-    if lang == "en":
-        menu_text = "🎮 <b>Game Menu</b>"
-        my_city_text = "🏛 My City"
-        build_text = "⚒ Build"
-        war_text = "⚔️ War"
-        end_turn_text = "⏭ End Turn"
-    else:
-        menu_text = "🎮 <b>Меню игры</b>"
-        my_city_text = "🏛 Мой город"
-        build_text = "⚒ Строить"
-        war_text = "⚔️ Война"
-        end_turn_text = "⏭ Завершить ход"
-        income_text = "📊 Income" if lang == "en" else "📊 Доход"
-    
-    game_keyboard = [
-        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
-        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
-    ]
-    
-    await query.edit_message_text(
-        menu_text,
-        reply_markup=InlineKeyboardMarkup(game_keyboard),
-        parse_mode="HTML"
-    )
+    await query.edit_message_text("✅ Back работает!")
     
 async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
