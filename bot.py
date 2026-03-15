@@ -1296,6 +1296,181 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(back_keyboard),
         parse_mode="HTML"
     )
+
+async def income(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    # Считаем доход от зданий
+    food_income = 0
+    faith_income = 0
+    material_income = 0
+    money_income = 0
+    int_income = 0
+    pop_growth = 0
+    bloodlust_bonus = 0
+    dev_points_bonus = 0
+    health_bonus = 0
+    
+    # Расходы (пока только еда, потом добавятся другие)
+    food_consumption = player.calculate_food_consumption()
+    faith_consumption = 0  # потом от событий
+    material_consumption = 0  # потом от стройки
+    money_consumption = 0  # потом от налогов
+    int_consumption = 0  # потом от стресса
+    health_consumption = 0  # от ран
+    pop_consumption = 0  # от голода
+    
+    buildings_list = []
+    unique_buildings_owned = set()
+    
+    for b_id in player.buildings:
+        building = BUILDINGS.get(b_id)
+        if not building:
+            continue
+        
+        buildings_list.append(building['name'])
+        
+        # Считаем эффекты по каждому зданию
+        if b_id == "farm":
+            food_income += 50
+        elif b_id == "sawmill":
+            material_income += 20
+        elif b_id == "church":
+            faith_income += 50
+        elif b_id == "forge":
+            bloodlust_bonus += 10
+        elif b_id == "laboratory":
+            int_income += 20
+        elif b_id == "mine":
+            material_income += 100
+        elif b_id == "tax_office":
+            money_income += 30
+        elif b_id == "library":
+            int_income += 50
+        elif b_id == "house":
+            pop_growth += 1
+        elif b_id == "necropolis":
+            pass  # эффект в бою
+        elif b_id == "sacred_grove":
+            health_bonus += 1000
+            bloodlust_bonus += 500
+            faith_income += 1000
+            unique_buildings_owned.add("sacred_grove")
+        elif b_id == "hell":
+            pop_growth += 10
+            unique_buildings_owned.add("hell")
+        elif b_id == "bone_throne":
+            pass  # эффект в еде
+            unique_buildings_owned.add("bone_throne")
+        elif b_id == "steam_engine":
+            dev_points_bonus += 500
+            unique_buildings_owned.add("steam_engine")
+    
+    # Чистый доход
+    net_food = food_income - food_consumption
+    net_faith = faith_income - faith_consumption
+    net_material = material_income - material_consumption
+    net_money = money_income - money_consumption
+    net_int = int_income - int_consumption
+    net_health = health_bonus - health_consumption
+    net_pop = pop_growth - pop_consumption
+    
+    # Заголовки на нужном языке
+    if lang == "en":
+        title = "📊 <b>Income Report</b>"
+        buildings_title = "🏗️ Buildings:"
+        income_title = "💰 Balance per round:"
+        unique_title = "⭐ Unique buildings (one-time):"
+        food_text = f"🍞 Food: +{food_income} | -{food_consumption} | Net: {net_food}"
+        faith_text = f"🙏 Faith: +{faith_income} | -{faith_consumption} | Net: {net_faith}"
+        material_text = f"📦 Materials: +{material_income} | -{material_consumption} | Net: {net_material}"
+        money_text = f"💰 Money: +{money_income} | -{money_consumption} | Net: {net_money}"
+        int_text = f"🧠 Intelligence: +{int_income} | -{int_consumption} | Net: {net_int}"
+        pop_text = f"👥 Population growth: +{pop_growth}% | -{pop_consumption}% | Net: {net_pop}%"
+        bloodlust_text = f"🔪 Bloodlust: +{bloodlust_bonus}"
+        health_text = f"❤️ Health: +{health_bonus} | -{health_consumption} | Net: {net_health}"
+        dev_text = f"⚙️ Dev Points: +{dev_points_bonus}"
+    else:
+        title = "📊 <b>Отчёт о доходе</b>"
+        buildings_title = "🏗️ Постройки:"
+        income_title = "💰 Баланс за раунд:"
+        unique_title = "⭐ Уникальные постройки (разовые):"
+        food_text = f"🍞 Еда: +{food_income} | -{food_consumption} | Итого: {net_food}"
+        faith_text = f"🙏 Вера: +{faith_income} | -{faith_consumption} | Итого: {net_faith}"
+        material_text = f"📦 Материалы: +{material_income} | -{material_consumption} | Итого: {net_material}"
+        money_text = f"💰 Деньги: +{money_income} | -{money_consumption} | Итого: {net_money}"
+        int_text = f"🧠 Интеллект: +{int_income} | -{int_consumption} | Итого: {net_int}"
+        pop_text = f"👥 Рост населения: +{pop_growth}% | -{pop_consumption}% | Итого: {net_pop}%"
+        bloodlust_text = f"🔪 Кровожадность: +{bloodlust_bonus}"
+        health_text = f"❤️ Жизнь: +{health_bonus} | -{health_consumption} | Итого: {net_health}"
+        dev_text = f"⚙️ Очки развития: +{dev_points_bonus}"
+    
+    # Формируем текст
+    text = f"{title}\n\n"
+    text += f"{buildings_title}\n"
+    text += ", ".join(buildings_list) if buildings_list else ("None" if lang == "en" else "Нет")
+    text += f"\n\n{income_title}\n"
+    text += f"{food_text}\n"
+    text += f"{faith_text}\n"
+    text += f"{material_text}\n"
+    text += f"{money_text}\n"
+    text += f"{int_text}\n"
+    text += f"{pop_text}\n"
+    text += f"{bloodlust_text}\n"
+    text += f"{health_text}\n"
+    text += f"{dev_text}\n"
+    
+    # Если есть уникальные постройки
+    if unique_buildings_owned:
+        text += f"\n{unique_title}\n"
+        for b in unique_buildings_owned:
+            if lang == "en":
+                names = {
+                    "sacred_grove": "🌳 Sacred Grove",
+                    "hell": "🔥 Hell",
+                    "bone_throne": "🦴 Bone Throne",
+                    "steam_engine": "⚙ Steam Engine"
+                }
+            else:
+                names = {
+                    "sacred_grove": "🌳 Священная роща",
+                    "hell": "🔥 Преисподняя",
+                    "bone_throne": "🦴 Костяной трон",
+                    "steam_engine": "⚙ Паровая машина"
+                }
+            text += f"• {names.get(b, b)}\n"
+    
+    # Кнопка назад
+    back_text = "🔙 Back" if lang == "en" else "🔙 Назад"
+    back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(back_keyboard),
+        parse_mode="HTML"
+    )
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
@@ -1367,6 +1542,7 @@ def run_bot():
     # Самые общие — в конце
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
+    app.add_handler(CallbackQueryHandler(income, pattern="income_"))
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
     app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
    
