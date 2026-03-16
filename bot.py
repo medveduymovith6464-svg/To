@@ -705,8 +705,9 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         return
     
-    if target_user_id not in active_rooms[room_id].get("allowed", []):
-        return
+    # 👇 УБИРАЕМ ПРОВЕРКУ ОЧЕРЕДИ!
+    # if target_user_id not in active_rooms[room_id].get("allowed", []):
+    #     return
     
     building = BUILDINGS.get(building_id)
     if not building:
@@ -729,8 +730,8 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Проверка на уникальные здания (можно только 1 раз)
-    unique_buildings = ["sacred_grove", "hell", "bone_throne", "steam_engine"]
+    # Проверка на уникальные здания
+    unique_buildings = ["sacredgrove", "hell", "bonethrone", "steamengine"]
     if building_id in unique_buildings and building_id in player.buildings:
         if lang == "en":
             text = f"❌ <b>You can only build one {building['name']}!</b>"
@@ -744,17 +745,16 @@ async def construct(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # СТРОИМ (просто добавляем в список, ресурсы начнут капать со следующего раунда)
+    # СТРОИМ
     player.dev_points -= building['cost']
     player.buildings.append(building_id)
     
-    # Название здания для сообщения
     if lang == "en":
         building_name = building['name']
-        success_text = f"✅ <b>{building_name} built!</b>\nRemaining Dev Points: {player.dev_points}\nIt will start producing next round."
+        success_text = f"✅ <b>{building_name} built!</b>\nRemaining Dev Points: {player.dev_points}"
     else:
         building_name = building.get('name_ru', building['name'])
-        success_text = f"✅ <b>{building_name} построено!</b>\nОсталось очков развития: {player.dev_points}\nНачнёт работать со следующего раунда."
+        success_text = f"✅ <b>{building_name} построено!</b>\nОсталось очков развития: {player.dev_points}"
     
     await query.edit_message_text(
         success_text,
