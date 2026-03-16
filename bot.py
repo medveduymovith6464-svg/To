@@ -312,7 +312,7 @@ BUILDINGS = {
         "name_ru": "🌳 Священная роща",
         "cost": 20000,
         "effect": "+1000 health, +500 bloodlust, +1000 faith",
-        "round_income": {}  # Разовый эффект, не каждый раунд
+        "round_income": {"health": 1000, "bloodlust": 500, "faith": 1000}
     },
     "hell": {
         "name": "🔥 Hell",
