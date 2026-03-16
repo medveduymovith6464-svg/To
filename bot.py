@@ -233,95 +233,107 @@ BUILDINGS = {
     # Начальные
     "house": {
         "name": "🏠 House",
+        "name_ru": "🏠 Дом",
         "cost": 50,
         "effect": "+1% population/round",
-        "apply": lambda p: setattr(p, 'population_growth', p.population_growth + 1)
+        "round_income": {"population_growth": 1}
     },
     "farm": {
         "name": "🌱 Farm", 
+        "name_ru": "🌱 Ферма",
         "cost": 100,
         "effect": "+50 food/round",
-        "apply": lambda p: setattr(p, 'food', p.food + 50)
+        "round_income": {"food": 50}
     },
     "sawmill": {
         "name": "🪵 Sawmill",
+        "name_ru": "🪵 Лесопилка",
         "cost": 200, 
         "effect": "+20 materials/round",
-        "apply": lambda p: setattr(p, 'materials', p.materials + 20)
+        "round_income": {"materials": 20}
     },
     "church": {
         "name": "⛪ Church",
+        "name_ru": "⛪ Церковь",
         "cost": 1000,
         "effect": "+50 faith/round",
-        "apply": lambda p: setattr(p, 'faith', p.faith + 50)
+        "round_income": {"faith": 50}
     },
     
     # Средние
     "forge": {
         "name": "⚒ Forge",
+        "name_ru": "⚒ Кузница",
         "cost": 800,
         "effect": "+10 bloodlust",
-        "apply": lambda p: setattr(p, 'bloodlust', p.bloodlust + 10)
+        "round_income": {"bloodlust": 10}
     },
     "laboratory": {
         "name": "🔬 Laboratory",
+        "name_ru": "🔬 Лаборатория",
         "cost": 1350,
         "effect": "+20 intelligence/round",
-        "apply": lambda p: setattr(p, 'intelligence', p.intelligence + 20)
+        "round_income": {"intelligence": 20}
     },
     "mine": {
         "name": "🕳 Mine",
+        "name_ru": "🕳 Шахта",
         "cost": 1500,
         "effect": "+100 materials/round",
-        "apply": lambda p: setattr(p, 'materials', p.materials + 100)
+        "round_income": {"materials": 100}
     },
     "tax_office": {
         "name": "💰 Tax Office",
+        "name_ru": "💰 Налоговая",
         "cost": 5000,
         "effect": "+30 money/round",
-        "apply": lambda p: setattr(p, 'money', p.money + 30)
+        "round_income": {"money": 30}
     },
     
     # Элитные
     "library": {
         "name": "📚 Library",
+        "name_ru": "📚 Библиотека",
         "cost": 8000,
         "effect": "+50 intelligence/round",
-        "apply": lambda p: setattr(p, 'intelligence', p.intelligence + 50)
+        "round_income": {"intelligence": 50}
     },
     "necropolis": {
         "name": "🪦 Necropolis",
+        "name_ru": "🪦 Некрополь",
         "cost": 12222,
         "effect": "Resurrect 10% units after battle",
-        "apply": lambda p: None  # Будет реализовано позже
+        "round_income": {}
     },
     
     # Легендарные (20000)
     "sacred_grove": {
         "name": "🌳 Sacred Grove",
+        "name_ru": "🌳 Священная роща",
         "cost": 20000,
         "effect": "+1000 health, +500 bloodlust, +1000 faith",
-        "apply": lambda p: (setattr(p, 'health', p.health + 1000),
-                           setattr(p, 'bloodlust', p.bloodlust + 500),
-                           setattr(p, 'faith', p.faith + 1000))
+        "round_income": {}  # Разовый эффект, не каждый раунд
     },
     "hell": {
         "name": "🔥 Hell",
+        "name_ru": "🔥 Преисподняя",
         "cost": 20000,
         "effect": "+10 units/round",
-        "apply": lambda p: setattr(p, 'population', p.population + 10)
+        "round_income": {"population": 10}
     },
     "bone_throne": {
         "name": "🦴 Bone Throne",
+        "name_ru": "🦴 Костяной трон",
         "cost": 20000,
         "effect": "Units don't eat food",
-        "apply": lambda p: None  # Будет реализовано позже
+        "round_income": {}
     },
     "steam_engine": {
         "name": "⚙ Steam Engine",
+        "name_ru": "⚙ Паровая машина",
         "cost": 20000,
         "effect": "+500 dev points/round",
-        "apply": lambda p: setattr(p, 'dev_points', p.dev_points + 500)
+        "round_income": {"dev_points": 500}
     }
 }
 
@@ -887,6 +899,51 @@ async def check_game_over(room_id, context):
     
     return False
 
+async def next_round(room_id, context):
+    """Начисляет доходы и расходы за раунд"""
+    if room_id not in active_rooms:
+        return
+    
+    players = active_rooms[room_id].get("players", [])
+    
+    for player in players:
+        # 1. ДОХОД ОТ ЗДАНИЙ
+        for building_id in player.buildings:
+            building = BUILDINGS.get(building_id)
+            if building and building.get("round_income"):
+                for resource, value in building["round_income"].items():
+                    if hasattr(player, resource):
+                        current = getattr(player, resource)
+                        setattr(player, resource, current + value)
+        
+        # 2. РАСХОДЫ (ЕДА)
+        food_consumed = player.calculate_food_consumption()
+        player.food -= food_consumed
+        
+        # Если еда ушла в минус - штрафуем население
+        if player.food < 0:
+            starvation = abs(player.food) // 10 + 1  # 1 смерть за каждые 10 еды долга
+            player.population = max(0, player.population - starvation)
+            player.food = 0  # Обнуляем еду
+        
+        # 3. ДЕПРЕССИЯ
+        player.depression += 1
+        player.apply_depression()
+        
+        # 4. ЛИМИТЫ (не даём превысить хранилище)
+        player.food = min(player.food, player.food_limit)
+        player.faith = min(player.faith, player.faith_limit)
+        player.labor = min(player.labor, player.labor_limit)
+        player.health = min(player.health, player.health_limit)
+        player.intelligence = min(player.intelligence, player.intelligence_limit)
+        player.money = min(player.money, 10000)
+        player.materials = min(player.materials, 10000)
+        player.dev_points = min(player.dev_points, 10000)
+        player.population = min(player.population, 10000)
+    
+    # Проверяем, не умер ли кто после всех расчётов
+    await check_game_over(room_id, context)
+
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -988,6 +1045,9 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     active_rooms[room_id]["allowed"] = [other_player.user_id]
     active_rooms[room_id]["current_player"] = other_player.user_id
+
+        # 👇 ВОТ СЮДА ВСТАВЛЯЙ!
+    await next_round(room_id, context)
     
     if await check_game_over(room_id, context):
         return
