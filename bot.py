@@ -1175,21 +1175,132 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if room_id not in active_rooms:
         return
     
-    # Тексты
+    player = None
+    other_player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+        else:
+            other_player = p
+    
+    if not player or not other_player:
+        return
+    
+    chat_id = active_rooms[room_id]["chat_id"]
+    try:
+        chat_member = await context.bot.get_chat_member(chat_id, other_player.user_id)
+        enemy_name = chat_member.user.username or chat_member.user.first_name or str(other_player.user_id)
+    except:
+        enemy_name = str(other_player.user_id)
+    
     if lang == "en":
-        war_text = "⚔️ <b>War is not implemented yet!</b>\n\nStay tuned for future updates."
+        text = (f"⚔️ <b>Attack {enemy_name}?</b>\n\n"
+                f"Your army: {player.population} units\n"
+                f"Enemy army: {other_player.population} units\n\n"
+                f"20% of your army will fight.")
+        confirm_text = "✅ Attack!"
         back_text = "🔙 Back"
     else:
-        war_text = "⚔️ <b>Война ещё не реализована!</b>\n\nСледите за обновлениями."
+        text = (f"⚔️ <b>Атаковать {enemy_name}?</b>\n\n"
+                f"Твоя армия: {player.population} юнитов\n"
+                f"Армия врага: {other_player.population} юнитов\n\n"
+                f"20% твоей армии пойдут в бой.")
+        confirm_text = "✅ Атаковать!"
         back_text = "🔙 Назад"
     
-    back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
+    buttons = [
+        [InlineKeyboardButton(confirm_text, callback_data=f"attack_{room_id}_{other_player.user_id}_{target_user_id}")],
+        [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]
+    ]
     
     await query.edit_message_text(
-        text=war_text,
-        reply_markup=InlineKeyboardMarkup(back_keyboard),
+        text,
+        reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="HTML"
     )
+
+async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-2])
+    enemy_id = int(parts[-2])
+    attacker_id = int(parts[-1])
+    
+    if query.from_user.id != attacker_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    attacker = None
+    defender = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == attacker_id:
+            attacker = p
+        elif p.user_id == enemy_id:
+            defender = p
+    
+    if not attacker or not defender:
+        return
+    
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    # Берём 20% армии
+    attack_force = attacker.population // 5
+    defend_force = defender.population // 5
+    
+    # Расчёт силы
+    attack_power = attack_force * attacker.bloodlust
+    defense_power = defend_force * defender.health
+    
+    # Крит от ненависти
+    crit_msg = ""
+    if attacker.hate > 0 and random.random() < attacker.hate / 100:
+        attack_power *= 2
+        attacker.hate = 0
+        crit_msg = "🔥 CRIT! " if lang == "en" else "🔥 КРИТ! "
+    
+    # Расчёт потерь
+    if attack_power > defense_power:
+        defender_losses = min(defend_force, (attack_power - defense_power) // defender.health + 1)
+        attacker_losses = attack_force // 4
+    else:
+        attacker_losses = min(attack_force, (defense_power - attack_power) // attacker.health + 1)
+        defender_losses = defend_force // 4
+    
+    attacker.population = max(0, attacker.population - attacker_losses)
+    defender.population = max(0, defender.population - defender_losses)
+    
+    chat_id = active_rooms[room_id]["chat_id"]
+    try:
+        attacker_name = (await context.bot.get_chat_member(chat_id, attacker_id)).user.username or str(attacker_id)
+        defender_name = (await context.bot.get_chat_member(chat_id, enemy_id)).user.username or str(enemy_id)
+    except:
+        attacker_name = str(attacker_id)
+        defender_name = str(enemy_id)
+    
+    if lang == "en":
+        result = (f"{crit_msg}⚔️ <b>Battle Results</b>\n\n"
+                  f"{attacker_name}\n├ Lost: {attacker_losses}\n└ Left: {attacker.population}\n\n"
+                  f"{defender_name}\n├ Lost: {defender_losses}\n└ Left: {defender.population}")
+        back_text = "🔙 Back"
+    else:
+        result = (f"{crit_msg}⚔️ <b>Результаты битвы</b>\n\n"
+                  f"{attacker_name}\n├ Потери: {attacker_losses}\n└ Осталось: {attacker.population}\n\n"
+                  f"{defender_name}\n├ Потери: {defender_losses}\n└ Осталось: {defender.population}")
+        back_text = "🔙 Назад"
+    
+    back_btn = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{attacker_id}")]]
+    
+    await query.edit_message_text(
+        result,
+        reply_markup=InlineKeyboardMarkup(back_btn),
+        parse_mode="HTML"
+    )
+    
+    await check_game_over(room_id, context)
 
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1916,6 +2027,7 @@ def run_bot():
     # Самые общие — в конце
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
     app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
+    app.add_handler(CallbackQueryHandler(attack, pattern="attack_"))
     app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(income, pattern="income_"))
