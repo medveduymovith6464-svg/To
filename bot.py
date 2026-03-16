@@ -160,9 +160,13 @@ class Player:
         elif building == "church":
             self.faith += 50
         # и так далее
-    
+   
     def calculate_food_consumption(self):
         """Сколько еды съедают юниты за раунд"""
+    # 👇 КОСТЯНОЙ ТРОН - отключает голод
+        if "bonethrone" in self.buildings:
+            return 0
+    
         if self.race_id == "demon":
             return 0  # демоны не едят
         elif self.race_id == "elf":
@@ -1272,6 +1276,18 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     attacker.population = max(0, attacker.population - attacker_losses)
     defender.population = max(0, defender.population - defender_losses)
+
+# 👇 НЕКРОПОЛЬ - воскрешает 10% погибших после боя
+    if "necropolis" in attacker.buildings:
+        resurrect = attacker_losses * 10 // 100
+        attacker.population += resurrect
+    # можно оставить здание (постоянный эффект) или удалить (одноразовый)
+    # attacker.buildings.remove("necropolis")  # раскомментируй, если одноразовый
+
+    if "necropolis" in defender.buildings:
+        resurrect = defender_losses * 10 // 100
+        defender.population += resurrect
+    # defender.buildings.remove("necropolis")  # раскомментируй, если одноразовый
     
     chat_id = active_rooms[room_id]["chat_id"]
     try:
