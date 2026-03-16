@@ -1197,14 +1197,14 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (f"⚔️ <b>Attack {enemy_name}?</b>\n\n"
                 f"Your army: {player.population} units\n"
                 f"Enemy army: {other_player.population} units\n\n"
-                f"20% of your army will fight.")
+                f"40% of your army will fight.")
         confirm_text = "✅ Attack!"
         back_text = "🔙 Back"
     else:
         text = (f"⚔️ <b>Атаковать {enemy_name}?</b>\n\n"
                 f"Твоя армия: {player.population} юнитов\n"
                 f"Армия врага: {other_player.population} юнитов\n\n"
-                f"20% твоей армии пойдут в бой.")
+                f"40% твоей армии пойдут в бой.")
         confirm_text = "✅ Атаковать!"
         back_text = "🔙 Назад"
     
