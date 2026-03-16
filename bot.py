@@ -1357,6 +1357,8 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mat_text = "Materials"
         pop_text = "Population"
         build_text = "Buildings"
+        upgrade_text = "📈 Upgrade"
+        back_text = "🔙 Back"
     else:
         food_text = "Еда"
         faith_text = "Вера"
@@ -1369,6 +1371,8 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mat_text = "Материалы"
         pop_text = "Население"
         build_text = "Постройки"
+        upgrade_text = "📈 Улучшить"
+        back_text = "🔙 Назад"
     
     text = f"<b>{title}</b>\n\n"
     text += f"🍞 {food_text}: {player.food}/{player.food_limit}\n"
@@ -1383,12 +1387,180 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 {pop_text}: {player.population}\n"
     text += f"🏗 {build_text}: {len(player.buildings)}"
     
-    back_text = "🔙 Back" if lang == "en" else "🔙 Назад"
-    back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
+    # Кнопки: Назад и Улучшить
+    buttons = [
+        [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(upgrade_text, callback_data=f"upgrade_menu_{room_id}_{target_user_id}")]
+    ]
     
     await query.edit_message_text(
         text,
-        reply_markup=InlineKeyboardMarkup(back_keyboard),
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="HTML"
+    )
+
+async def upgrade_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[2:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    # Цены на улучшение (за +100 к лимиту)
+    upgrade_costs = {
+        "food": 100,
+        "faith": 200,
+        "labor": 500,
+        "health": 1000,
+        "intelligence": 750
+    }
+    
+    if lang == "en":
+        title = "📈 <b>Upgrade Limits</b>"
+        food_text = f"🍞 Food: +100 limit for {upgrade_costs['food']}💰"
+        faith_text = f"🙏 Faith: +100 limit for {upgrade_costs['faith']}💰"
+        labor_text = f"⚒ Labor: +100 limit for {upgrade_costs['labor']}💰"
+        health_text = f"❤️ Health: +100 limit for {upgrade_costs['health']}💰"
+        int_text = f"🧠 Intelligence: +100 limit for {upgrade_costs['intelligence']}💰"
+        back_text = "🔙 Back"
+        money_text = f"Your money: {player.money}💰"
+    else:
+        title = "📈 <b>Улучшение лимитов</b>"
+        food_text = f"🍞 Еда: +100 к лимиту за {upgrade_costs['food']}💰"
+        faith_text = f"🙏 Вера: +100 к лимиту за {upgrade_costs['faith']}💰"
+        labor_text = f"⚒ Труд: +100 к лимиту за {upgrade_costs['labor']}💰"
+        health_text = f"❤️ Жизнь: +100 к лимиту за {upgrade_costs['health']}💰"
+        int_text = f"🧠 Интеллект: +100 к лимиту за {upgrade_costs['intelligence']}💰"
+        back_text = "🔙 Назад"
+        money_text = f"Твои деньги: {player.money}💰"
+    
+    buttons = [
+        [InlineKeyboardButton(food_text, callback_data=f"upgrade_{room_id}_food_{target_user_id}")],
+        [InlineKeyboardButton(faith_text, callback_data=f"upgrade_{room_id}_faith_{target_user_id}")],
+        [InlineKeyboardButton(labor_text, callback_data=f"upgrade_{room_id}_labor_{target_user_id}")],
+        [InlineKeyboardButton(health_text, callback_data=f"upgrade_{room_id}_health_{target_user_id}")],
+        [InlineKeyboardButton(int_text, callback_data=f"upgrade_{room_id}_intelligence_{target_user_id}")],
+        [InlineKeyboardButton(back_text, callback_data=f"mycity_{room_id}_{target_user_id}")]
+    ]
+    
+    await query.edit_message_text(
+        f"{title}\n\n{money_text}",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="HTML"
+    )
+
+async def do_upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-2])
+    resource = parts[-2]
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    # Цены на улучшение
+    upgrade_costs = {
+        "food": 100,
+        "faith": 200,
+        "labor": 500,
+        "health": 1000,
+        "intelligence": 750
+    }
+    
+    cost = upgrade_costs.get(resource)
+    if not cost:
+        return
+    
+    if player.money < cost:
+        if lang == "en":
+            text = f"❌ Not enough money! Need {cost}💰"
+            back_text = "🔙 Back"
+        else:
+            text = f"❌ Не хватает денег! Нужно {cost}💰"
+            back_text = "🔙 Назад"
+        
+        back_button = [[InlineKeyboardButton(back_text, callback_data=f"mycity_{room_id}_{target_user_id}")]]
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(back_button),
+            parse_mode="HTML"
+        )
+        return
+    
+    # Увеличиваем лимит
+    if resource == "food":
+        player.food_limit += 100
+    elif resource == "faith":
+        player.faith_limit += 100
+    elif resource == "labor":
+        player.labor_limit += 100
+    elif resource == "health":
+        player.health_limit += 100
+    elif resource == "intelligence":
+        player.intelligence_limit += 100
+    
+    # Списываем деньги
+    player.money -= cost
+    
+    if lang == "en":
+        text = f"✅ <b>{resource.capitalize()} limit increased!</b>\n"
+        text += f"New limit: {getattr(player, f'{resource}_limit')}\n"
+        text += f"Remaining money: {player.money}💰"
+        back_text = "🔙 Back to City"
+    else:
+        resource_names = {
+            "food": "Еды",
+            "faith": "Веры",
+            "labor": "Труда",
+            "health": "Жизни",
+            "intelligence": "Интеллекта"
+        }
+        rus_name = resource_names.get(resource, resource)
+        text = f"✅ <b>Лимит {rus_name} увеличен!</b>\n"
+        text += f"Новый лимит: {getattr(player, f'{resource}_limit')}\n"
+        text += f"Осталось денег: {player.money}💰"
+        back_text = "🔙 В город"
+    
+    back_button = [[InlineKeyboardButton(back_text, callback_data=f"mycity_{room_id}_{target_user_id}")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(back_button),
         parse_mode="HTML"
     )
 
@@ -1636,6 +1808,8 @@ def run_bot():
     
     # Самые общие — в конце
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
+    app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
+    app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(income, pattern="income_"))
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
