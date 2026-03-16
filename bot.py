@@ -495,30 +495,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =============================================================================
-# БЛОК 6: СТАТИСТИКА РАС (тут считается винрейт и решается кто имба)
+# БЛОК 7: ЛИЧНАЯ СТАТИСТИКА (сколько игрок сыграл и выиграл)
 # =============================================================================
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = sqlite3.connect("game.db")
+async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM games")
-    total_games = c.fetchone()[0]
+    c.execute("SELECT games_played, wins FROM players WHERE user_id = %s", (update.effective_user.id,))
+    result = c.fetchone()
+    conn.close()
     
-    if total_games == 0:
-        await update.message.reply_text("📊 No games yet.", parse_mode="HTML")
-        conn.close()
+    if not result:
+        await update.message.reply_text("You haven't played any games yet!")
         return
     
-    text = "📊 <b>BALANCE REPORT</b>\n"
-    for race_id, race_data in RACES.items():
-        c.execute("SELECT COUNT(*) FROM games WHERE winner_race = ?", (race_id,))
-        wins = c.fetchone()[0]
-        winrate = (wins / total_games * 100) if total_games > 0 else 0
-        status = "🔥" if winrate > 27 else "💩" if winrate < 20 else "✅"
-        text += f"\n{race_data['emoji']} {race_data['name']}: {wins} wins ({winrate:.1f}%) {status}"
+    games, wins = result
+    winrate = (wins / games * 100) if games > 0 else 0
+    await update.message.reply_text(
+        f"📊 <b>Your Stats</b>\nGames: {games}\nWins: {wins}\nWinrate: {winrate:.1f}%",
+        parse_mode="HTML"
+    )
     
-    conn.close()
-    await update.message.reply_text(text, parse_mode="HTML")
-
 # =============================================================================
 # БЛОК 7: ЛИЧНАЯ СТАТИСТИКА (сколько игрок сыграл и выиграл)
 # =============================================================================
@@ -568,35 +564,25 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Используй: /broadcast [текст]")
         return
     
-    # 👇 ПРОВЕРКА БАЗЫ
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM players")
-    count = c.fetchone()[0]
-    await update.message.reply_text(f"👥 В базе: {count} игроков")
+    users = get_all_players()
     
-    if count == 0:
+    if not users:
         await update.message.reply_text("❌ База пуста!")
-        conn.close()
         return
-    
-    c.execute("SELECT user_id FROM players")
-    users = c.fetchall()
-    conn.close()
     
     text = ' '.join(context.args)
     ok = 0
     bad = 0
     
-    for u in users:
+    for user in users:
         try:
-            await context.bot.send_message(u[0], f"📢 {text}")
+            await context.bot.send_message(user['user_id'], f"📢 {text}")
             ok += 1
         except:
             bad += 1
     
     await update.message.reply_text(f"✅ {ok} ок, ❌ {bad} нет")
-
+    
 #  =============================================================================
 # БЛОК 9: КОМНАТЫ (создание и управление игровыми комнатами)
 #  =============================================================================
@@ -1011,14 +997,9 @@ async def check_game_over(room_id, context):
             except:
                 pass
         
-        # Сохраняем в базу
-        conn = sqlite3.connect("game.db")
-        c = conn.cursor()
+        # 👇 СОХРАНЯЕМ В NEON (вместо SQLite)
         players_data = [{"user_id": p.user_id, "race": p.race_id, "alive": (p in alive_players)} for p in players]
-        c.execute("INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (?, ?, ?, ?, ?)",
-                  (datetime.now(), winner.race_id, winner.user_id, json.dumps(players_data), room_id))
-        conn.commit()
-        conn.close()
+        save_game(winner.race_id, winner.user_id, players_data, room_id)
         
         del active_rooms[room_id]
         return True
@@ -1035,6 +1016,11 @@ async def check_game_over(room_id, context):
                 )
             except:
                 pass
+        
+        # 👇 ТОЖЕ СОХРАНЯЕМ (ничья)
+        players_data = [{"user_id": p.user_id, "race": p.race_id, "alive": False} for p in players]
+        save_game("draw", 0, players_data, room_id)
+        
         del active_rooms[room_id]
         return True
     
