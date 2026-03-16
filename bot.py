@@ -403,7 +403,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(TEXTS[lang]["language"], callback_data="language")]
     ]
     
-    # Приветствие на нужном языке
     await update.message.reply_text(
         TEXTS[lang]["welcome"].format(GAME_NAME),
         reply_markup=InlineKeyboardMarkup(keyboard),
