@@ -477,44 +477,41 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # ТВОЙ ID (вот он)
-    if user_id != 6950162933:  # ← твой ID
-        return  # просто игнорим
-    
-    if not context.args:
-        await update.message.reply_text(
-            "📢 <b>Broadcast</b>\n\n"
-            "Используй: <code>/broadcast [текст]</code>",
-            parse_mode="HTML"
-        )
+    if user_id != 6950162933:
         return
     
-    broadcast_text = ' '.join(context.args)
+    if not context.args:
+        await update.message.reply_text("Используй: /broadcast [текст]")
+        return
     
+    # 👇 ПРОВЕРКА БАЗЫ
     conn = sqlite3.connect("game.db")
     c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM players")
+    count = c.fetchone()[0]
+    await update.message.reply_text(f"👥 В базе: {count} игроков")
+    
+    if count == 0:
+        await update.message.reply_text("❌ База пуста!")
+        conn.close()
+        return
+    
     c.execute("SELECT user_id FROM players")
     users = c.fetchall()
     conn.close()
     
-    success = 0
-    failed = 0
+    text = ' '.join(context.args)
+    ok = 0
+    bad = 0
     
-    for user in users:
+    for u in users:
         try:
-            await context.bot.send_message(
-                chat_id=user[0],
-                text=f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{broadcast_text}",
-                parse_mode="HTML"
-            )
-            success += 1
+            await context.bot.send_message(u[0], f"📢 {text}")
+            ok += 1
         except:
-            failed += 1
+            bad += 1
     
-    await update.message.reply_text(
-        f"✅ Отправлено: {success}\n❌ Ошибок: {failed}",
-        parse_mode="HTML"
-    )
+    await update.message.reply_text(f"✅ {ok} ок, ❌ {bad} нет")
 
 #  =============================================================================
 # БЛОК 9: КОМНАТЫ (создание и управление игровыми комнатами)
