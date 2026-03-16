@@ -916,21 +916,24 @@ async def next_round(room_id, context):
                         current = getattr(player, resource)
                         setattr(player, resource, current + value)
         
-        # 2. РАСХОДЫ (ЕДА)
+        # 2. БАЗОВЫЙ ДОХОД ЗА РАУНД (500 очков)
+        player.dev_points += 500
+        
+        # 3. РАСХОДЫ (ЕДА)
         food_consumed = player.calculate_food_consumption()
         player.food -= food_consumed
         
         # Если еда ушла в минус - штрафуем население
         if player.food < 0:
-            starvation = abs(player.food) // 10 + 1  # 1 смерть за каждые 10 еды долга
+            starvation = abs(player.food) // 10 + 1
             player.population = max(0, player.population - starvation)
-            player.food = 0  # Обнуляем еду
+            player.food = 0
         
-        # 3. ДЕПРЕССИЯ
+        # 4. ДЕПРЕССИЯ
         player.depression += 1
         player.apply_depression()
         
-        # 4. ЛИМИТЫ (не даём превысить хранилище)
+        # 5. ЛИМИТЫ
         player.food = min(player.food, player.food_limit)
         player.faith = min(player.faith, player.faith_limit)
         player.labor = min(player.labor, player.labor_limit)
@@ -941,7 +944,6 @@ async def next_round(room_id, context):
         player.dev_points = min(player.dev_points, 10000)
         player.population = min(player.population, 10000)
     
-    # Проверяем, не умер ли кто после всех расчётов
     await check_game_over(room_id, context)
 
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
