@@ -4,11 +4,11 @@ import random
 import sys
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime  # ← ЭТО ВАЖНО!
+import asyncio
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import asyncio  # ← ВОТ СЮДА ДОБАВЬ ЭТУ СТРОЧКУ!
 # =============================================================================
 # ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (ВОТ СЮДА!)
 # =============================================================================
@@ -25,7 +25,6 @@ GAME_NAME = "Tribes: Last Standing"
 # =============================================================================
 # БЛОК 2: БАЗА ДАННЫХ (PostgreSQL на Neon)
 # =============================================================================
-import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -36,78 +35,95 @@ def get_db():
 
 def init_db():
     """Создаёт таблицы, если их нет"""
-    conn = get_db()
-    c = conn.cursor()
-    
-    # Таблица игроков
-    c.execute("""CREATE TABLE IF NOT EXISTS players (
-        user_id BIGINT PRIMARY KEY, 
-        username TEXT, 
-        games_played INTEGER DEFAULT 0,
-        wins INTEGER DEFAULT 0, 
-        registered_at TIMESTAMP
-    )""")
-    
-    # Таблица игр
-    c.execute("""CREATE TABLE IF NOT EXISTS games (
-        id SERIAL PRIMARY KEY, 
-        date TIMESTAMP, 
-        winner_race TEXT,
-        winner_id BIGINT, 
-        players TEXT, 
-        room_id TEXT
-    )""")
-    
-    conn.commit()
-    conn.close()
-    print("✅ База данных Neon инициализирована")
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Таблица игроков
+        c.execute("""CREATE TABLE IF NOT EXISTS players (
+            user_id BIGINT PRIMARY KEY, 
+            username TEXT, 
+            games_played INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0, 
+            registered_at TIMESTAMP
+        )""")
+        
+        # Таблица игр
+        c.execute("""CREATE TABLE IF NOT EXISTS games (
+            id SERIAL PRIMARY KEY, 
+            date TIMESTAMP, 
+            winner_race TEXT,
+            winner_id BIGINT, 
+            players TEXT, 
+            room_id TEXT
+        )""")
+        
+        conn.commit()
+        conn.close()
+        print("✅ База данных Neon инициализирована")
+    except Exception as e:
+        print(f"❌ Ошибка при инициализации БД: {e}")
 
 def add_player(user_id, username):
     """Добавляет нового игрока или игнорит, если уже есть"""
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO players (user_id, username, registered_at) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO NOTHING",
-        (user_id, username, datetime.now())
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO players (user_id, username, registered_at) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO NOTHING",
+            (user_id, username, datetime.now())
+        )
+        conn.commit()
+        conn.close()
+        print(f"✅ Игрок {user_id} добавлен в БД")
+    except Exception as e:
+        print(f"❌ Ошибка при добавлении игрока {user_id}: {e}")
 
 def get_all_players():
     """Возвращает список всех user_id"""
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT user_id FROM players")
-    users = c.fetchall()
-    conn.close()
-    return users
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT user_id FROM players")
+        users = c.fetchall()
+        conn.close()
+        return users
+    except Exception as e:
+        print(f"❌ Ошибка при получении списка игроков: {e}")
+        return []
 
 def update_player_stats(user_id, won=False):
     """Обновляет статистику игрока после игры"""
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        "UPDATE players SET games_played = games_played + 1 WHERE user_id = %s",
-        (user_id,)
-    )
-    if won:
+    try:
+        conn = get_db()
+        c = conn.cursor()
         c.execute(
-            "UPDATE players SET wins = wins + 1 WHERE user_id = %s",
+            "UPDATE players SET games_played = games_played + 1 WHERE user_id = %s",
             (user_id,)
         )
-    conn.commit()
-    conn.close()
+        if won:
+            c.execute(
+                "UPDATE players SET wins = wins + 1 WHERE user_id = %s",
+                (user_id,)
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении статистики игрока {user_id}: {e}")
 
 def save_game(winner_race, winner_id, players_data, room_id):
     """Сохраняет информацию о завершённой игре"""
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (%s, %s, %s, %s, %s)",
-        (datetime.now(), winner_race, winner_id, json.dumps(players_data), room_id)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (%s, %s, %s, %s, %s)",
+            (datetime.now(), winner_race, winner_id, json.dumps(players_data), room_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении игры: {e}")
 
 # Инициализация при запуске
 init_db()
@@ -457,13 +473,8 @@ user_languages = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Сохраняем игрока в базу
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO players (user_id, username, registered_at) VALUES (?, ?, ?)",
-              (user_id, update.effective_user.username, datetime.now()))
-    conn.commit()
-    conn.close()
+    # Сохраняем игрока в Neon
+    add_player(user_id, update.effective_user.username)
     
     # Получаем язык пользователя (по умолчанию английский)
     lang = user_languages.get(user_id, "en")
@@ -476,6 +487,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(TEXTS[lang]["language"], callback_data="language")]
     ]
     
+    # Приветствие на нужном языке
     await update.message.reply_text(
         TEXTS[lang]["welcome"].format(GAME_NAME),
         reply_markup=InlineKeyboardMarkup(keyboard),
