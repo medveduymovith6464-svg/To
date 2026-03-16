@@ -23,20 +23,93 @@ YOUR_ID = 6950162933  # СЮДА ВСТАВЬ СВОЙ ID
 GAME_NAME = "Tribes: Last Standing"
 
 # =============================================================================
-# БЛОК 2: БАЗА ДАННЫХ (сохраняет игры, игроков, статистику)
+# БЛОК 2: БАЗА ДАННЫХ (PostgreSQL на Neon)
 # =============================================================================
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+def get_db():
+    """Возвращает подключение к Neon PostgreSQL"""
+    DATABASE_URL = os.environ.get("NEON_DB_URL")
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
 def init_db():
-    conn = sqlite3.connect("game.db")
+    """Создаёт таблицы, если их нет"""
+    conn = get_db()
     c = conn.cursor()
+    
+    # Таблица игроков
     c.execute("""CREATE TABLE IF NOT EXISTS players (
-        user_id INTEGER PRIMARY KEY, username TEXT, games_played INTEGER DEFAULT 0,
-        wins INTEGER DEFAULT 0, registered_at TIMESTAMP)""")
+        user_id BIGINT PRIMARY KEY, 
+        username TEXT, 
+        games_played INTEGER DEFAULT 0,
+        wins INTEGER DEFAULT 0, 
+        registered_at TIMESTAMP
+    )""")
+    
+    # Таблица игр
     c.execute("""CREATE TABLE IF NOT EXISTS games (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, date TIMESTAMP, winner_race TEXT,
-        winner_id INTEGER, players TEXT, room_id TEXT)""")
+        id SERIAL PRIMARY KEY, 
+        date TIMESTAMP, 
+        winner_race TEXT,
+        winner_id BIGINT, 
+        players TEXT, 
+        room_id TEXT
+    )""")
+    
+    conn.commit()
+    conn.close()
+    print("✅ База данных Neon инициализирована")
+
+def add_player(user_id, username):
+    """Добавляет нового игрока или игнорит, если уже есть"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO players (user_id, username, registered_at) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO NOTHING",
+        (user_id, username, datetime.now())
+    )
     conn.commit()
     conn.close()
 
+def get_all_players():
+    """Возвращает список всех user_id"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM players")
+    users = c.fetchall()
+    conn.close()
+    return users
+
+def update_player_stats(user_id, won=False):
+    """Обновляет статистику игрока после игры"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE players SET games_played = games_played + 1 WHERE user_id = %s",
+        (user_id,)
+    )
+    if won:
+        c.execute(
+            "UPDATE players SET wins = wins + 1 WHERE user_id = %s",
+            (user_id,)
+        )
+    conn.commit()
+    conn.close()
+
+def save_game(winner_race, winner_id, players_data, room_id):
+    """Сохраняет информацию о завершённой игре"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (%s, %s, %s, %s, %s)",
+        (datetime.now(), winner_race, winner_id, json.dumps(players_data), room_id)
+    )
+    conn.commit()
+    conn.close()
+
+# Инициализация при запуске
 init_db()
 
 # =============================================================================
