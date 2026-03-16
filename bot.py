@@ -1042,25 +1042,20 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_name = await get_username(target_user_id)
     next_name = await get_username(other_player.user_id)
     
-    # 👇 ЛОГИКА РАУНДОВ
     current_turn = active_rooms[room_id].get("turn", 1)
     current_round = active_rooms[room_id].get("round", 1)
     
-    # Если ход был чётный (2,4,6...) - значит раунд закончился
+    # 👇 ЕСЛИ ЭТО БЫЛ ЧЁТНЫЙ ХОД (2,4,6...) — ЗАКАНЧИВАЕМ РАУНД
     if current_turn % 2 == 0:
         current_round += 1
         active_rooms[room_id]["round"] = current_round
+        # 👇 НАЧИСЛЯЕМ РЕСУРСЫ ТОЛЬКО В КОНЦЕ РАУНДА!
+        await next_round(room_id, context)
     
     # Увеличиваем номер хода
     active_rooms[room_id]["turn"] = current_turn + 1
     active_rooms[room_id]["allowed"] = [other_player.user_id]
     active_rooms[room_id]["current_player"] = other_player.user_id
-    
-    # 👇 НАЧИСЛЯЕМ РЕСУРСЫ
-    await next_round(room_id, context)
-    
-    if await check_game_over(room_id, context):
-        return
     
     # Тексты с номером раунда
     if lang == "en":
@@ -1091,7 +1086,7 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
          InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]
     ]
-    
+
     await query.edit_message_text(
         text=turn_ended_text,
         reply_markup=InlineKeyboardMarkup(game_keyboard),
