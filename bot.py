@@ -1247,9 +1247,9 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     lang = active_rooms[room_id].get("lang", "en")
     
-    # Берём 20% армии
-    attack_force = attacker.population // 5
-    defend_force = defender.population // 5
+    # 👇 40% АРМИИ (было 20%)
+    attack_force = attacker.population * 40 // 100
+    defend_force = defender.population * 40 // 100
     
     # Расчёт силы
     attack_power = attack_force * attacker.bloodlust
@@ -1281,22 +1281,56 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         attacker_name = str(attacker_id)
         defender_name = str(enemy_id)
     
+    # 👇 АВТОМАТИЧЕСКАЯ ПЕРЕДАЧА ХОДА
+    # Находим другого игрока
+    other_player = defender  # противник становится следующим
+    
+    # Меняем очередь
+    active_rooms[room_id]["allowed"] = [other_player.user_id]
+    active_rooms[room_id]["current_player"] = other_player.user_id
+    active_rooms[room_id]["turn"] = active_rooms[room_id].get("turn", 1) + 1
+    
+    # Проверяем, не закончилась ли игра
+    if await check_game_over(room_id, context):
+        return
+    
+    # Тексты с результатом
     if lang == "en":
         result = (f"{crit_msg}⚔️ <b>Battle Results</b>\n\n"
                   f"{attacker_name}\n├ Lost: {attacker_losses}\n└ Left: {attacker.population}\n\n"
-                  f"{defender_name}\n├ Lost: {defender_losses}\n└ Left: {defender.population}")
-        back_text = "🔙 Back"
+                  f"{defender_name}\n├ Lost: {defender_losses}\n└ Left: {defender.population}\n\n"
+                  f"🔄 Turn passed to {defender_name}")
+        
+        # Кнопки для следующего игрока
+        my_city_text = "🏛 My City"
+        build_text = "⚒ Build"
+        war_text = "⚔️ War"
+        end_turn_text = "⏭ End Turn"
+        income_text = "📊 Income"
     else:
         result = (f"{crit_msg}⚔️ <b>Результаты битвы</b>\n\n"
                   f"{attacker_name}\n├ Потери: {attacker_losses}\n└ Осталось: {attacker.population}\n\n"
-                  f"{defender_name}\n├ Потери: {defender_losses}\n└ Осталось: {defender.population}")
-        back_text = "🔙 Назад"
+                  f"{defender_name}\n├ Потери: {defender_losses}\n└ Осталось: {defender.population}\n\n"
+                  f"🔄 Ход передан {defender_name}")
+        
+        my_city_text = "🏛 Мой город"
+        build_text = "⚒ Строить"
+        war_text = "⚔️ Война"
+        end_turn_text = "⏭ Завершить ход"
+        income_text = "📊 Доход"
     
-    back_btn = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{attacker_id}")]]
+    # 👇 КНОПКИ ДЛЯ НОВОГО ИГРОКА (уже без "Attack", только меню)
+    game_keyboard = [
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]
+    ]
     
     await query.edit_message_text(
         result,
-        reply_markup=InlineKeyboardMarkup(back_btn),
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
     
