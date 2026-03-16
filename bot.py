@@ -470,6 +470,63 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text("✅ Thanks! Bug reported.", parse_mode="HTML")
 
+# =============================================================================
+# БЛОК 8.5: РАССЫЛКА (только для админа)
+# =============================================================================
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Проверяем, что это админ (ты)
+    if user_id != YOUR_ID:
+        return  # просто игнорим, если не ты
+    
+    # Если написали просто /broadcast
+    if not context.args:
+        await update.message.reply_text(
+            "📢 <b>Broadcast</b>\n\n"
+            "Используй: <code>/broadcast [текст]</code>\n"
+            "Пример: <code>/broadcast Всем привет! Новая фича!</code>",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Получаем текст сообщения
+    broadcast_text = ' '.join(context.args)
+    
+    # Отправляем себе подтверждение
+    await update.message.reply_text("⏳ Начинаю рассылку...")
+    
+    # Достаем всех пользователей из базы
+    conn = sqlite3.connect("game.db")
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM players")
+    users = c.fetchall()
+    conn.close()
+    
+    # Счетчики
+    success = 0
+    failed = 0
+    
+    # Отправляем каждому
+    for user in users:
+        try:
+            await context.bot.send_message(
+                chat_id=user[0],
+                text=f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{broadcast_text}",
+                parse_mode="HTML"
+            )
+            success += 1
+        except Exception as e:
+            print(f"Не отправилось пользователю {user[0]}: {e}")
+            failed += 1
+    
+    # Отчет админу
+    await update.message.reply_text(
+        f"✅ <b>Рассылка завершена!</b>\n\n"
+        f"📨 Отправлено: {success}\n"
+        f"❌ Ошибок: {failed}",
+        parse_mode="HTML"
+    )
 
 #  =============================================================================
 # БЛОК 9: КОМНАТЫ (создание и управление игровыми комнатами)
@@ -2139,6 +2196,7 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
     app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
     app.add_handler(CallbackQueryHandler(attack, pattern="attack_"))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(income, pattern="income_"))
