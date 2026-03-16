@@ -757,37 +757,35 @@ async def start_game(room_id, context, chat_id):
     if len(active_rooms[room_id]["choices"]) != 2:
         return
     
-    # Создаём игроков
     players = []
+    player_usernames = []
     for user_id, race_id in active_rooms[room_id]["choices"].items():
         player = Player(user_id, race_id)
         players.append(player)
+        
+        # Получаем юзернейм или имя
+        try:
+            chat_member = await context.bot.get_chat_member(chat_id, user_id)
+            username = chat_member.user.username or chat_member.user.first_name or str(user_id)
+        except:
+            username = str(user_id)
+        player_usernames.append(username)
     
     active_rooms[room_id]["players"] = players
-    active_rooms[room_id]["turn"] = 1
+    active_rooms[room_id]["turn"] = 1  # номер хода (1,2,3,4...)
+    active_rooms[room_id]["round"] = 1  # номер раунда
     active_rooms[room_id]["current_player"] = players[0].user_id
     
-    # Получаем язык из комнаты
-    lang = active_rooms[room_id].get("lang", "en")
+    # Определяем язык (по первому игроку)
+    lang = user_languages.get(players[0].user_id, "en")
     
-    # Получаем имена игроков
-    player1_name = str(players[0].user_id)
-    player2_name = str(players[1].user_id)
-    try:
-        chat_member1 = await context.bot.get_chat_member(chat_id, players[0].user_id)
-        player1_name = chat_member1.user.username or chat_member1.user.first_name or str(players[0].user_id)
-        
-        chat_member2 = await context.bot.get_chat_member(chat_id, players[1].user_id)
-        player2_name = chat_member2.user.username or chat_member2.user.first_name or str(players[1].user_id)
-    except:
-        pass
-    
-    # Тексты на нужном языке
+    # Тексты с юзернеймами и номером раунда
     if lang == "en":
         start_text = (f"⚔️ <b>GAME STARTED!</b>\n\n"
-                     f"👤 Player 1: {players[0].race_id} (@{player1_name})\n"
-                     f"👤 Player 2: {players[1].race_id} (@{player2_name})\n"
-                     f"🎮 <b>{player1_name}</b>'s turn!")
+                     f"📅 Round 1 begins\n"
+                     f"👤 Player 1: {players[0].race_id} (@{player_usernames[0]})\n"
+                     f"👤 Player 2: {players[1].race_id} (@{player_usernames[1]})\n"
+                     f"🎮 <b>{player_usernames[0]}</b>'s turn!")
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
@@ -795,16 +793,16 @@ async def start_game(room_id, context, chat_id):
         income_text = "📊 Income"
     else:
         start_text = (f"⚔️ <b>ИГРА НАЧАЛАСЬ!</b>\n\n"
-                     f"👤 Игрок 1: {players[0].race_id} (@{player1_name})\n"
-                     f"👤 Игрок 2: {players[1].race_id} (@{player2_name})\n"
-                     f"🎮 Ходит <b>{player1_name}</b>!")
+                     f"📅 Раунд 1 начался\n"
+                     f"👤 Игрок 1: {players[0].race_id} (@{player_usernames[0]})\n"
+                     f"👤 Игрок 2: {players[1].race_id} (@{player_usernames[1]})\n"
+                     f"🎮 Ходит <b>{player_usernames[0]}</b>!")
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
         income_text = "📊 Доход"
-
-    # КЛАВИАТУРА — ВАЖНО: используем players[0].user_id, а не other_player!
+    
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{players[0].user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{players[0].user_id}")],
@@ -1044,12 +1042,30 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_name = await get_username(target_user_id)
     next_name = await get_username(other_player.user_id)
     
+    # 👇 ЛОГИКА РАУНДОВ
+    current_turn = active_rooms[room_id].get("turn", 1)
+    current_round = active_rooms[room_id].get("round", 1)
+    
+    # Если ход был чётный (2,4,6...) - значит раунд закончился
+    if current_turn % 2 == 0:
+        current_round += 1
+        active_rooms[room_id]["round"] = current_round
+    
+    # Увеличиваем номер хода
+    active_rooms[room_id]["turn"] = current_turn + 1
     active_rooms[room_id]["allowed"] = [other_player.user_id]
     active_rooms[room_id]["current_player"] = other_player.user_id
     
-    # 👇 ВАЖНО: СНАЧАЛА ПОКАЗЫВАЕМ СООБЩЕНИЕ
+    # 👇 НАЧИСЛЯЕМ РЕСУРСЫ
+    await next_round(room_id, context)
+    
+    if await check_game_over(room_id, context):
+        return
+    
+    # Тексты с номером раунда
     if lang == "en":
         turn_ended_text = (f"🔄 <b>Turn ended!</b>\n\n"
+                          f"📅 Round {current_round}\n"
                           f"👤 {current_name} finished their turn.\n"
                           f"🎮 Now <b>{next_name}</b>'s turn!")
         my_city_text = "🏛 My City"
@@ -1059,6 +1075,7 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         income_text = "📊 Income"
     else:
         turn_ended_text = (f"🔄 <b>Ход закончен!</b>\n\n"
+                          f"📅 Раунд {current_round}\n"
                           f"👤 {current_name} завершил ход.\n"
                           f"🎮 Теперь ходит <b>{next_name}</b>!")
         my_city_text = "🏛 Мой город"
@@ -1074,18 +1091,12 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
          InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]
     ]
-
+    
     await query.edit_message_text(
         text=turn_ended_text,
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
-    
-    # 👇 А ТЕПЕРЬ УЖЕ НАЧИСЛЯЕМ РЕСУРСЫ
-    await next_round(room_id, context)
-    
-    if await check_game_over(room_id, context):
-        return
 
 async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
