@@ -282,7 +282,7 @@ BUILDINGS = {
         "effect": "+100 materials/round",
         "round_income": {"materials": 100}
     },
-    "tax_office": {
+    "taxoffice": {
         "name": "💰 Tax Office",
         "name_ru": "💰 Налоговая",
         "cost": 5000,
@@ -307,7 +307,7 @@ BUILDINGS = {
     },
     
     # Легендарные (20000)
-    "sacred_grove": {
+    "sacredgrove": {
         "name": "🌳 Sacred Grove",
         "name_ru": "🌳 Священная роща",
         "cost": 20000,
@@ -321,14 +321,14 @@ BUILDINGS = {
         "effect": "+10 units/round",
         "round_income": {"population": 10}
     },
-    "bone_throne": {
+    "bonethrone": {
         "name": "🦴 Bone Throne",
         "name_ru": "🦴 Костяной трон",
         "cost": 20000,
         "effect": "Units don't eat food",
         "round_income": {}
     },
-    "steam_engine": {
+    "steamengine": {
         "name": "⚙ Steam Engine",
         "name_ru": "⚙ Паровая машина",
         "cost": 20000,
