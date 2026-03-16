@@ -495,6 +495,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =============================================================================
+# БЛОК 6: СТАТИСТИКА РАС (тут считается винрейт и решается кто имба)
+# =============================================================================
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM games")
+    total_games = c.fetchone()[0]
+    
+    if total_games == 0:
+        await update.message.reply_text("📊 No games yet.", parse_mode="HTML")
+        conn.close()
+        return
+    
+    text = "📊 <b>BALANCE REPORT</b>\n"
+    for race_id, race_data in RACES.items():
+        c.execute("SELECT COUNT(*) FROM games WHERE winner_race = %s", (race_id,))
+        wins = c.fetchone()[0]
+        winrate = (wins / total_games * 100) if total_games > 0 else 0
+        status = "🔥" if winrate > 27 else "💩" if winrate < 20 else "✅"
+        text += f"\n{race_data['emoji']} {race_data['name']}: {wins} wins ({winrate:.1f}%) {status}"
+    
+    conn.close()
+    await update.message.reply_text(text, parse_mode="HTML")
+    
+# =============================================================================
 # БЛОК 7: ЛИЧНАЯ СТАТИСТИКА (сколько игрок сыграл и выиграл)
 # =============================================================================
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -515,27 +540,6 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
     
-# =============================================================================
-# БЛОК 7: ЛИЧНАЯ СТАТИСТИКА (сколько игрок сыграл и выиграл)
-# =============================================================================
-async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    conn = sqlite3.connect("game.db")
-    c = conn.cursor()
-    c.execute("SELECT games_played, wins FROM players WHERE user_id = ?", (update.effective_user.id,))
-    result = c.fetchone()
-    conn.close()
-    
-    if not result:
-        await update.message.reply_text("You haven't played any games yet!")
-        return
-    
-    games, wins = result
-    winrate = (wins / games * 100) if games > 0 else 0
-    await update.message.reply_text(
-        f"📊 <b>Your Stats</b>\nGames: {games}\nWins: {wins}\nWinrate: {winrate:.1f}%",
-        parse_mode="HTML"
-    )
-
 # =============================================================================
 # БЛОК 8: РЕПОРТЫ (отправка багов тебе в личку)
 # =============================================================================
@@ -1922,106 +1926,6 @@ async def cure_depression(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(back_button),
         parse_mode="HTML"
     )
-
-async def income(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    parts = query.data.split("_")
-    room_id = "_".join(parts[1:-1])
-    target_user_id = int(parts[-1])
-    
-    if query.from_user.id != target_user_id:
-        return
-    
-    if room_id not in active_rooms:
-        return
-    
-    player = None
-    for p in active_rooms[room_id].get("players", []):
-        if p.user_id == target_user_id:
-            player = p
-            break
-    
-    if not player:
-        return
-    
-    lang = active_rooms[room_id].get("lang", "en")
-    
-    # Считаем доход от зданий
-    food_income = 0
-    faith_income = 0
-    material_income = 0
-    money_income = 0
-    int_income = 0
-    pop_growth = 0
-    bloodlust_bonus = 0
-    dev_points_bonus = 0
-    health_bonus = 0
-    
-    # Расходы (пока только еда, потом добавятся другие)
-    food_consumption = player.calculate_food_consumption()
-    faith_consumption = 0  # потом от событий
-    material_consumption = 0  # потом от стройки
-    money_consumption = 0  # потом от налогов
-    int_consumption = 0  # потом от стресса
-    health_consumption = 0  # от ран
-    pop_consumption = 0  # от голода
-    
-    buildings_list = []
-    unique_buildings_owned = set()
-    
-    for b_id in player.buildings:
-        building = BUILDINGS.get(b_id)
-        if not building:
-            continue
-        
-        buildings_list.append(building['name'])
-        
-        # Считаем эффекты по каждому зданию
-        if b_id == "farm":
-            food_income += 50
-        elif b_id == "sawmill":
-            material_income += 20
-        elif b_id == "church":
-            faith_income += 50
-        elif b_id == "forge":
-            bloodlust_bonus += 10
-        elif b_id == "laboratory":
-            int_income += 20
-        elif b_id == "mine":
-            material_income += 100
-        elif b_id == "tax_office":
-            money_income += 30
-        elif b_id == "library":
-            int_income += 50
-        elif b_id == "house":
-            pop_growth += 1
-        elif b_id == "necropolis":
-            pass  # эффект в бою
-        elif b_id == "sacred_grove":
-            health_bonus += 1000
-            bloodlust_bonus += 500
-            faith_income += 1000
-            unique_buildings_owned.add("sacred_grove")
-        elif b_id == "hell":
-            pop_growth += 10
-            unique_buildings_owned.add("hell")
-        elif b_id == "bone_throne":
-            pass  # эффект в еде
-            unique_buildings_owned.add("bone_throne")
-        elif b_id == "steam_engine":
-            dev_points_bonus += 500
-            unique_buildings_owned.add("steam_engine")
-    
-    # Чистый доход
-    net_food = food_income - food_consumption
-    net_faith = faith_income - faith_consumption
-    net_material = material_income - material_consumption
-    net_money = money_income - money_consumption
-    net_int = int_income - int_consumption
-    net_health = health_bonus - health_consumption
-    net_pop = pop_growth - pop_consumption
     
 async def income(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
