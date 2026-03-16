@@ -1574,17 +1574,13 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 {pop_text}: {player.population}\n"
     text += f"🏗 {build_text}: {len(player.buildings)}"
     
-    # Кнопки: Назад и Улучшить
+# Кнопки: Назад, Улучшить, Лечить
     buttons = [
         [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(upgrade_text, callback_data=f"upgrade_menu_{room_id}_{target_user_id}")]
+         InlineKeyboardButton(upgrade_text, callback_data=f"upgrade_menu_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton("💊 Cure Depression" if lang == "en" else "💊 Лечить депрессию", 
+                              callback_data=f"cure_depression_{room_id}_{target_user_id}")]
     ]
-    
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode="HTML"
-    )
 
 async def upgrade_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1742,6 +1738,62 @@ async def do_upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"Новый лимит: {getattr(player, f'{resource}_limit')}\n"
         text += f"Осталось денег: {player.money}💰"
         back_text = "🔙 В город"
+    
+    back_button = [[InlineKeyboardButton(back_text, callback_data=f"mycity_{room_id}_{target_user_id}")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(back_button),
+        parse_mode="HTML"
+    )
+
+async def cure_depression(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[2:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    # Лечение: тратим веру+еду+труд = уменьшаем депрессию
+    cure_amount = 10  # лечим 10 депрессии за раз
+    
+    if player.faith >= cure_amount and player.food >= cure_amount and player.labor >= cure_amount:
+        player.faith -= cure_amount
+        player.food -= cure_amount
+        player.labor -= cure_amount
+        player.depression = max(0, player.depression - cure_amount)
+        
+        if lang == "en":
+            text = f"✅ <b>Depression cured!</b>\nReduced by {cure_amount}\nCurrent: {player.depression}"
+            back_text = "🔙 Back to City"
+        else:
+            text = f"✅ <b>Депрессия вылечена!</b>\nУменьшена на {cure_amount}\nТекущая: {player.depression}"
+            back_text = "🔙 В город"
+    else:
+        if lang == "en":
+            text = f"❌ <b>Not enough resources!</b>\nNeed: {cure_amount} Faith, {cure_amount} Food, {cure_amount} Labor"
+            back_text = "🔙 Back"
+        else:
+            text = f"❌ <b>Не хватает ресурсов!</b>\nНужно: {cure_amount} Веры, {cure_amount} Еды, {cure_amount} Труда"
+            back_text = "🔙 Назад"
     
     back_button = [[InlineKeyboardButton(back_text, callback_data=f"mycity_{room_id}_{target_user_id}")]]
     
@@ -2054,6 +2106,7 @@ def run_bot():
     app.add_handler(CommandHandler("stats", my_stats))
     
     # Сначала самые длинные/точные паттерны
+    app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
     app.add_handler(CallbackQueryHandler(construct, pattern="construct_"))
     app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
     
