@@ -1032,7 +1032,6 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Получаем юзернеймы
     chat_id = active_rooms[room_id]["chat_id"]
     
-    # Функция для получения имени
     async def get_username(user_id):
         try:
             chat_member = await context.bot.get_chat_member(chat_id, user_id)
@@ -1045,14 +1044,8 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     active_rooms[room_id]["allowed"] = [other_player.user_id]
     active_rooms[room_id]["current_player"] = other_player.user_id
-
-        # 👇 ВОТ СЮДА ВСТАВЛЯЙ!
-    await next_round(room_id, context)
     
-    if await check_game_over(room_id, context):
-        return
-    
-    # Тексты для сообщения о смене хода
+    # 👇 ВАЖНО: СНАЧАЛА ПОКАЗЫВАЕМ СООБЩЕНИЕ
     if lang == "en":
         turn_ended_text = (f"🔄 <b>Turn ended!</b>\n\n"
                           f"👤 {current_name} finished their turn.\n"
@@ -1061,6 +1054,7 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         build_text = "⚒ Build"
         war_text = "⚔️ War"
         end_turn_text = "⏭ End Turn"
+        income_text = "📊 Income"
     else:
         turn_ended_text = (f"🔄 <b>Ход закончен!</b>\n\n"
                           f"👤 {current_name} завершил ход.\n"
@@ -1069,8 +1063,8 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
-        income_text = "📊 Income" if lang == "en" else "📊 Доход"
-
+        income_text = "📊 Доход"
+    
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
@@ -1084,6 +1078,12 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
+    
+    # 👇 А ТЕПЕРЬ УЖЕ НАЧИСЛЯЕМ РЕСУРСЫ
+    await next_round(room_id, context)
+    
+    if await check_game_over(room_id, context):
+        return
 
 async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
