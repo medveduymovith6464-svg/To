@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import asyncio  # ← ВОТ СЮДА ДОБАВЬ ЭТУ СТРОЧКУ!
 # =============================================================================
 # ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (ВОТ СЮДА!)
 # =============================================================================
