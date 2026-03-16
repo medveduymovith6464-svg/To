@@ -1513,6 +1513,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_id = "_".join(parts[1:-1])
     target_user_id = int(parts[-1])
     
+    # Проверка владельца
     if query.from_user.id != target_user_id:
         return
     
@@ -1545,6 +1546,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pop_text = "Population"
         build_text = "Buildings"
         upgrade_text = "📈 Upgrade"
+        cure_text = "💊 Cure"
         back_text = "🔙 Back"
     else:
         food_text = "Еда"
@@ -1559,6 +1561,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pop_text = "Население"
         build_text = "Постройки"
         upgrade_text = "📈 Улучшить"
+        cure_text = "💊 Лечить"
         back_text = "🔙 Назад"
     
     text = f"<b>{title}</b>\n\n"
@@ -1574,13 +1577,18 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"👥 {pop_text}: {player.population}\n"
     text += f"🏗 {build_text}: {len(player.buildings)}"
     
-# Кнопки: Назад, Улучшить, Лечить
+    # Кнопки
     buttons = [
         [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}"),
          InlineKeyboardButton(upgrade_text, callback_data=f"upgrade_menu_{room_id}_{target_user_id}")],
-        [InlineKeyboardButton("💊 Cure Depression" if lang == "en" else "💊 Лечить депрессию", 
-                              callback_data=f"cure_depression_{room_id}_{target_user_id}")]
+        [InlineKeyboardButton(cure_text, callback_data=f"cure_depression_{room_id}_{target_user_id}")]
     ]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="HTML"
+    )
 
 async def upgrade_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
