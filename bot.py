@@ -3271,6 +3271,7 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(income, pattern="income_"))
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
     app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
+    app.add_handler(CommandHandler("howtoplay", help_command))
     
     # ========== ОБРАБОТЧИКИ ДЛЯ АРТОВ ==========
     # Слушатель каналов
