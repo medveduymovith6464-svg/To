@@ -3101,10 +3101,14 @@ def run_bot():
         await reload_arts_from_channels(app.bot)
     app.job_queue.run_once(load_arts, 0)
     
+    # ========== ОСНОВНЫЕ КОМАНДЫ ==========
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("suggest", suggest))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("stats", my_stats))
+    app.add_handler(CommandHandler("howtoplay", help_command))
+    app.add_handler(CommandHandler("bonus", bonus))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     
     # Сначала самые длинные/точные паттерны
     app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
@@ -3134,13 +3138,11 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
     app.add_handler(CallbackQueryHandler(delete_events, pattern="delete_events_"))
     app.add_handler(CallbackQueryHandler(attack, pattern="attack_"))
-    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(income, pattern="income_"))
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
     app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
-    app.add_handler(CommandHandler("howtoplay", help_command))
     
     # ========== ОБРАБОТЧИКИ ДЛЯ АРТОВ ==========
     # Слушатель каналов
@@ -3148,9 +3150,6 @@ def run_bot():
         filters.Chat(username="@Senkocommon") | filters.Chat(username="@SenkoRare"), 
         channel_post
     ))
-    
-    # Команда /bonus
-    app.add_handler(CommandHandler("bonus", bonus))
     
     # Кнопки для артов
     app.add_handler(CallbackQueryHandler(get_bonus, pattern="get_bonus"))
@@ -3165,12 +3164,12 @@ def run_bot():
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     
-    # ========== ОБРАБОТЧИКИ ДЛЯ ПРЕДЛОЖЕНИЙ (ИСПРАВЛЕНО!) ==========
+    # ========== ОБРАБОТЧИКИ ДЛЯ ПРЕДЛОЖЕНИЙ ==========
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_suggested_art))
     app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_c_"))
     app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_r_"))
     app.add_handler(CallbackQueryHandler(suggest_reject, pattern="sug_x_"))
-    # ========================================================
+    # =================================================
    
     app.run_polling()
 
