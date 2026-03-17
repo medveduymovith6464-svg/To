@@ -711,7 +711,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 <b>Your Stats</b>\nGames: {games}\nWins: {wins}\nWinrate: {winrate:.1f}%",
         parse_mode="HTML"
     )
-    
+
 # =============================================================================
 # БЛОК 8: ПРЕДЛОЖИТЬ АРТ (вместо репортов)
 # =============================================================================
@@ -744,16 +744,20 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         user = update.effective_user
         user_name = user.username or user.first_name or str(user_id)
         
-        # 👇 БЕРЁМ ТОЛЬКО ПОСЛЕДНИЕ 20 СИМВОЛОВ file_id
         short_file_id = file_id[-20:] if len(file_id) > 20 else file_id
         
-        # Сохраняем полный file_id в контекст
-        context.user_data[f"art_{short_file_id}"] = file_id
+        # Сохраняем в bot_data (глобально!)
+        if 'suggested_arts' not in context.bot_data:
+            context.bot_data['suggested_arts'] = {}
+        context.bot_data['suggested_arts'][short_file_id] = {
+            'file_id': file_id,
+            'user_id': user_id
+        }
         
         keyboard = [
-            [InlineKeyboardButton("✅ Common (100)", callback_data=f"sug_c_{user_id}_{short_file_id}"),
-             InlineKeyboardButton("✅ Rare (500)", callback_data=f"sug_r_{user_id}_{short_file_id}")],
-            [InlineKeyboardButton("❌ Reject", callback_data=f"sug_x_{user_id}_{short_file_id}")]
+            [InlineKeyboardButton("✅ Common (100)", callback_data=f"sug_c_{short_file_id}"),
+             InlineKeyboardButton("✅ Rare (500)", callback_data=f"sug_r_{short_file_id}")],
+            [InlineKeyboardButton("❌ Reject", callback_data=f"sug_x_{short_file_id}")]
         ]
         
         await context.bot.send_photo(
@@ -767,7 +771,7 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data['awaiting_art'] = False
         
     except Exception as e:
-        print(f"❌ Error in handle_suggested_art: {e}")
+        print(f"❌ Error: {e}")
         await update.message.reply_text("❌ Something went wrong. Try again!")
         context.user_data['awaiting_art'] = False
 
@@ -777,16 +781,17 @@ async def suggest_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = query.data.split("_")
     rarity = "common" if data[1] == "c" else "rare"
-    user_id = int(data[2])
-    short_file_id = data[3]
+    short_file_id = data[2]
     
-    # Восстанавливаем полный file_id
-    file_id = context.user_data.get(f"art_{short_file_id}")
-    if not file_id:
+    # Достаём из bot_data
+    art_data = context.bot_data.get('suggested_arts', {}).get(short_file_id)
+    if not art_data:
         await query.edit_message_caption(caption="❌ Art not found!")
         return
     
-    # Награда
+    user_id = art_data['user_id']
+    file_id = art_data['file_id']
+    
     reward = 100 if rarity == "common" else 500
     
     conn = get_db()
@@ -809,21 +814,29 @@ async def suggest_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_caption(
         caption=f"✅ Approved as {rarity}! +{reward} coins to user."
     )
+    
+    # Очищаем
+    del context.bot_data['suggested_arts'][short_file_id]
 
 async def suggest_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     data = query.data.split("_")
-    user_id = int(data[2])
+    short_file_id = data[2]
     
-    try:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="😔 Your art wasn't approved. Try again!"
-        )
-    except:
-        pass
+    # Достаём user_id из bot_data
+    art_data = context.bot_data.get('suggested_arts', {}).get(short_file_id)
+    if art_data:
+        user_id = art_data['user_id']
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="😔 Your art wasn't approved. Try again!"
+            )
+        except:
+            pass
+        del context.bot_data['suggested_arts'][short_file_id]
     
     await query.edit_message_caption(caption="❌ Rejected")
     
