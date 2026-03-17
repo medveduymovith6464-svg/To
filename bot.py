@@ -59,6 +59,13 @@ def init_db():
             room_id TEXT
         )""")
         
+        # 👇 НОВАЯ ТАБЛИЦА ДЛЯ СЕНКО-КОИНОВ
+        c.execute("""CREATE TABLE IF NOT EXISTS neko_coins (
+            user_id BIGINT PRIMARY KEY,
+            coins INTEGER DEFAULT 0,
+            last_bonus DATE
+        )""")
+        
         conn.commit()
         conn.close()
         print("✅ База данных Neon инициализирована")
@@ -2631,25 +2638,146 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    cost = 10 if "10" in query.data else 50
-    rarity = "common" if cost == 10 else "rare"
-    user_id = query.from_user.id
+# =============================================================================
+# BLOCK: SENKO COINS & ARTS (NEON VERSION)
+# =============================================================================
+
+SENKO_ARTS = {"common": [], "rare": []}
+
+async def channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.channel_post or not update.channel_post.photo:
+        return
     
-    # Check balance
-    conn = sqlite3.connect("game.db")
+    chat = update.channel_post.chat
+    file_id = update.channel_post.photo[-1].file_id
+    
+    if chat.username == "Senkocommon":
+        SENKO_ARTS["common"].append(file_id)
+        print(f"✅ Common art added: {file_id}")
+    elif chat.username == "SenkoRare":
+        SENKO_ARTS["rare"].append(file_id)
+        print(f"✅ Rare art added: {file_id}")
+
+async def bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = ?", (user_id,))
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    result = c.fetchone()
+    balance = result['coins'] if result else 0
+    conn.close()
+    
+    keyboard = [
+        [InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
+         InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")]
+    ]
+    
+    await update.message.reply_text(
+        f"🐱 <b>Senko Coins Shop</b>\n\n"
+        f"Your balance: {balance}💰\n\n"
+        f"Choose option:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def get_bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    today = datetime.now().date()
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute("SELECT last_bonus FROM neko_coins WHERE user_id = %s", (user_id,))
     result = c.fetchone()
     
-    if not result or result[0] < cost:
+    if result and result['last_bonus'] == today:
         await query.edit_message_text(
-            f"❌ Not enough SenkoCoins!\nNeed: {cost}, You have: {result[0] if result else 0}",
+            "❌ You already claimed your daily bonus!\nCome back tomorrow.",
             parse_mode="HTML"
         )
         conn.close()
         return
     
-    # Check if arts available
+    if result:
+        c.execute("UPDATE neko_coins SET coins = coins + 10, last_bonus = %s WHERE user_id = %s",
+                  (today, user_id))
+    else:
+        c.execute("INSERT INTO neko_coins (user_id, coins, last_bonus) VALUES (%s, 10, %s)",
+                  (user_id, today))
+    
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    new_balance = c.fetchone()['coins']
+    
+    conn.commit()
+    conn.close()
+    
+    keyboard = [
+        [InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
+         InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")]
+    ]
+    
+    await query.edit_message_text(
+        f"✅ <b>+10 Senko Coins!</b>\n\n"
+        f"New balance: {new_balance}💰\n\n"
+        f"Choose option:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    result = c.fetchone()
+    balance = result['coins'] if result else 0
+    conn.close()
+    
+    keyboard = [
+        [InlineKeyboardButton("10 SenkoCoins", callback_data="buy_art_10"),
+         InlineKeyboardButton("50 SenkoCoins", callback_data="buy_art_50")],
+        [InlineKeyboardButton("1 Telegram Star", callback_data="buy_star_1"),
+         InlineKeyboardButton("5 Telegram Stars", callback_data="buy_star_5")],
+        [InlineKeyboardButton("🔙 Back", callback_data="bonus_back")]
+    ]
+    
+    await query.edit_message_text(
+        f"🖼 <b>Buy Art</b>\n\n"
+        f"Your balance: {balance} SenkoCoins\n\n"
+        f"Choose payment method:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    cost = 10 if "10" in query.data else 50
+    rarity = "common" if cost == 10 else "rare"
+    user_id = query.from_user.id
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    result = c.fetchone()
+    
+    if not result or result['coins'] < cost:
+        await query.edit_message_text(
+            f"❌ Not enough SenkoCoins!\nNeed: {cost}, You have: {result['coins'] if result else 0}",
+            parse_mode="HTML"
+        )
+        conn.close()
+        return
+    
     if not SENKO_ARTS[rarity]:
         await query.edit_message_text(
             "❌ No arts available yet!\nTry again later.",
@@ -2658,15 +2786,12 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         return
     
-    # Get random art
     file_id = random.choice(SENKO_ARTS[rarity])
     
-    # Deduct coins
-    c.execute("UPDATE neko_coins SET coins = coins - ? WHERE user_id = ?", (cost, user_id))
+    c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
     conn.commit()
     conn.close()
     
-    # Send art
     await context.bot.send_photo(
         chat_id=user_id,
         photo=file_id,
@@ -2674,31 +2799,28 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
     
-    # Return to menu
     keyboard = [
         [InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
          InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")]
     ]
     
     await query.edit_message_text(
-        f"✅ Art sent! Check your PM.\n\n"
-        f"Choose option:",
+        f"✅ Art sent! Check your PM.\n\nChoose option:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
 
-# Back to main menu
 async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
     
-    conn = sqlite3.connect("game.db")
+    conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = ?", (user_id,))
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
     result = c.fetchone()
-    balance = result[0] if result else 0
+    balance = result['coins'] if result else 0
     conn.close()
     
     keyboard = [
