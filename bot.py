@@ -3262,19 +3262,16 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # Загружаем арты при старте
-    async def load_arts(context):
+    # Загружаем арты и проверяем сброс статистики при старте
+    async def load_arts_and_reset(context):
         await reload_arts_from_channels(app.bot)
-    app.job_queue.run_once(load_arts, 0)
-    asyncio.create_task(check_weekly_reset())
-    # ========== ОСНОВНЫЕ КОМАНДЫ ==========
+        await check_weekly_reset()
+    app.job_queue.run_once(load_arts_and_reset, 0)
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("suggest", suggest))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("stats", my_stats))
-    app.add_handler(CommandHandler("howtoplay", help_command))
-    app.add_handler(CommandHandler("bonus", bonus))
-    app.add_handler(CommandHandler("broadcast", broadcast))
     
     # Сначала самые длинные/точные паттерны
     app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
@@ -3304,6 +3301,7 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
     app.add_handler(CallbackQueryHandler(delete_events, pattern="delete_events_"))
     app.add_handler(CallbackQueryHandler(attack, pattern="attack_"))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(income, pattern="income_"))
@@ -3316,6 +3314,9 @@ def run_bot():
         filters.Chat(username="@Senkocommon") | filters.Chat(username="@SenkoRare"), 
         channel_post
     ))
+    
+    # Команда /bonus
+    app.add_handler(CommandHandler("bonus", bonus))
     
     # Кнопки для артов
     app.add_handler(CallbackQueryHandler(get_bonus, pattern="get_bonus"))
@@ -3335,7 +3336,7 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_c_"))
     app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_r_"))
     app.add_handler(CallbackQueryHandler(suggest_reject, pattern="sug_x_"))
-    # =================================================
+    # ============================================
    
     app.run_polling()
 
