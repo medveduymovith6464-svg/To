@@ -742,10 +742,14 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         user_id = update.effective_user.id
         file_id = update.message.photo[-1].file_id
         
+        # Получаем имя (username или first_name)
+        user = update.effective_user
+        user_name = user.username or user.first_name or str(user_id)
+        
         # 👇 ТЕСТОВОЕ СООБЩЕНИЕ ТЕБЕ
         await context.bot.send_message(
             chat_id=YOUR_ID,
-            text=f"🔍 Тест: Trying to send art from @{update.effective_user.username}"
+            text=f"🔍 Тест: Trying to send art from @{user_name}"
         )
         
         # Отправляем тебе на утверждение
@@ -758,7 +762,7 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         await context.bot.send_photo(
             chat_id=YOUR_ID,
             photo=file_id,
-            caption=f"🆕 New art from @{update.effective_user.username}",
+            caption=f"🆕 New art from @{user_name}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
