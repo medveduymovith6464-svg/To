@@ -2835,6 +2835,28 @@ async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
+
+async def reload_arts_from_channels(context):
+    """Загружает все file_id из каналов при старте бота"""
+    SENKO_ARTS["common"] = []
+    SENKO_ARTS["rare"] = []
+    
+    try:
+        # Читаем обычный канал
+        async for message in context.bot.get_chat_history("@Senkocommon", limit=100):
+            if message.photo:
+                file_id = message.photo[-1].file_id
+                SENKO_ARTS["common"].append(file_id)
+        
+        # Читаем редкий канал
+        async for message in context.bot.get_chat_history("@SenkoRare", limit=100):
+            if message.photo:
+                file_id = message.photo[-1].file_id
+                SENKO_ARTS["rare"].append(file_id)
+        
+        print(f"✅ Арты загружены: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+    except Exception as e:
+        print(f"❌ Ошибка загрузки артов: {e}")
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
@@ -2877,6 +2899,10 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================================================================
 def run_bot():
     app = Application.builder().token(TOKEN).build()
+    
+    # 👇 ЗАГРУЗКА АРТОВ ПРИ СТАРТЕ
+    asyncio.create_task(reload_arts_from_channels(app.bot))
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report))
     app.add_handler(CommandHandler("balance", balance))
