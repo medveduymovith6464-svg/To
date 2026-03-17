@@ -3004,141 +3004,102 @@ async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Часть 1 - английская
-    part1 = """
-🎮 <b>TRIBES: LAST STANDING — ENGLISH GUIDE</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>📊 RESOURCES:</b>
-• 🍞 Food — consumed by units every round. If Food < 0, your population STARVES!
-• 🙏 Faith — prevents rebellions. If Faith < 200, there's a 10% chance of REVOLT every round
-• ⚒ Labor — used for building structures
-• ❤️ Health — unit's health in battle
-• 🔪 Bloodlust — unit's damage in battle (CANNOT be increased!)
-• 🧠 Intelligence — crit chance: 100 Int = 1% chance for x2 damage
-• 😔 Depression — grows +1 each round. At 100 depression — YOU LOSE!
-• 😈 Hate — increases crit chance in battle: 100 Hate = 1% chance for x2 damage
-• 💰 Money — used to upgrade resource limits
-• 📦 Materials — used for construction
-• ⚡ Dev Points — main currency for building
-
-<b>🏗️ BUILDINGS:</b>
-• 🏠 House — +1% population growth per round
-• 🌱 Farm — +50 food per round
-• 🪵 Sawmill — +20 materials per round
-• ⛪ Church — +50 faith per round
-• ⚒ Forge — +10 bloodlust per round
-• 🔬 Laboratory — +20 intelligence per round
-• 🕳 Mine — +100 materials per round
-• 💰 Tax Office — +30 money per round
-• 📚 Library — +50 intelligence per round
-• 🪦 Necropolis — resurrect 10% of fallen units after battle
-• 🌳 Sacred Grove — +1000 health, +500 bloodlust, +1000 faith per round
-• 🔥 Hell — +10 population per round
-• 🦴 Bone Throne — units don't eat food
-• ⚙ Steam Engine — +500 dev points per round
-    """
+    # Отправляем английскую часть
+    await update.message.reply_text(
+        "🎮 <b>TRIBES: LAST STANDING — ENGLISH GUIDE</b>\n\n"
+        "<b>📊 RESOURCES:</b>\n"
+        "• 🍞 Food — consumed by units. If Food < 0, population STARVES!\n"
+        "• 🙏 Faith — prevents rebellions. If Faith < 200, 10% REVOLT chance\n"
+        "• ⚒ Labor — for building\n"
+        "• ❤️ Health — unit health\n"
+        "• 🔪 Bloodlust — damage (CANNOT increase!)\n"
+        "• 🧠 Intelligence — crit chance: 100 = 1% x2 damage\n"
+        "• 😔 Depression — +1 per round. At 100 — YOU LOSE!\n"
+        "• 😈 Hate — crit chance in battle\n"
+        "• 💰 Money — upgrade limits\n"
+        "• 📦 Materials — construction\n"
+        "• ⚡ Dev Points — main currency\n\n"
+        "<b>🏗️ BUILDINGS:</b>\n"
+        "• 🏠 House — +1% population growth\n"
+        "• 🌱 Farm — +50 food\n"
+        "• 🪵 Sawmill — +20 materials\n"
+        "• ⛪ Church — +50 faith\n"
+        "• ⚒ Forge — +10 bloodlust\n"
+        "• 🔬 Laboratory — +20 intelligence\n"
+        "• 🕳 Mine — +100 materials\n"
+        "• 💰 Tax Office — +30 money\n"
+        "• 📚 Library — +50 intelligence\n"
+        "• 🪦 Necropolis — resurrect 10% after battle\n"
+        "• 🌳 Sacred Grove — +1000 health, +500 bloodlust, +1000 faith\n"
+        "• 🔥 Hell — +10 population\n"
+        "• 🦴 Bone Throne — no food consumption\n"
+        "• ⚙ Steam Engine — +500 dev points\n\n"
+        "<b>⚔️ WAR:</b>\n"
+        "• Attack with 40% of army\n"
+        "• Damage = (attackers × bloodlust) vs (defenders × health)\n"
+        "• Critical hits (Hate) = x2 damage\n"
+        "• Turn passes after attack\n\n"
+        "<b>😔 DEPRESSION & REBELLIONS:</b>\n"
+        "• Depression +1 per round\n"
+        "• Cure: 100 Faith + 10 Food + 10 Labor = -1 depression\n"
+        "• If Faith < 200: 10% REVOLT chance\n"
+        "• Revolt = -30% population +5 depression\n\n"
+        "<b>🐱 SENKO COINS:</b>\n"
+        "• /bonus — 10 daily\n"
+        "• /open 10 — common art (SFW)\n"
+        "• /open 50 — RARE art (🔥 HORNY! 🔥)\n"
+        "• /suggest — propose art (100-500 coins)\n\n"
+        "<i>🇷🇺 Russian version in next message</i>",
+        parse_mode="HTML"
+    )
     
-    part2 = """
-<b>⚔️ WAR:</b>
-• Attack with 40% of your army
-• Damage = (attackers × bloodlust) vs (defenders × health)
-• Critical hits (from Hate) deal x2 damage
-• After attack, turn automatically passes to opponent
-
-<b>😔 DEPRESSION & REBELLIONS:</b>
-• Depression +1 every round
-• Cure depression: spend 100 Faith + 10 Food + 10 Labor = -1 depression
-• If Faith < 200: 10% chance of REVOLT each round
-• Revolt = -30% population +5 depression
-
-<b>🐱 SENKO COINS & ARTS:</b>
-• /bonus — 10 coins daily
-• /open 10 — common art (SFW)
-• /open 50 — RARE art (🔥 HORNY! 🔥)
-• /suggest — propose your own art (100-500 coins!)
-
-<b>💖 SUPPORT:</b>
-• Buy arts with Stars — helps keep the bot alive!
-• Arts stored in @SenkoCommon and @SenkoRare
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>Send /helpru for Russian version</i>
-    """
-    
-    # Часть 3 - русская
-    part3 = """
-🎮 <b>TRIBES: LAST STANDING — РУССКОЕ РУКОВОДСТВО</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>📊 РЕСУРСЫ:</b>
-• 🍞 Еда — расходуется юнитами. Если еда < 0 — население ГОЛОДАЕТ!
-• 🙏 Вера — предотвращает бунты. Если Вера < 200, 10% шанс БУНТА
-• ⚒ Труд — для постройки зданий
-• ❤️ Жизнь — здоровье юнитов
-• 🔪 Кровожадность — урон (НЕ улучшается!)
-• 🧠 Интеллект — шанс крита: 100 = 1% на x2 урон
-• 😔 Депрессия — +1 в раунд. При 100 — ТЫ ПРОИГРАЛ!
-• 😈 Ненависть — шанс крита в бою
-• 💰 Деньги — улучшение лимитов
-• 📦 Материалы — для строительства
-• ⚡ Очки развития — основная валюта
-
-<b>🏗️ ПОСТРОЙКИ:</b>
-• 🏠 Дом — +1% роста населения
-• 🌱 Ферма — +50 еды
-• 🪵 Лесопилка — +20 материалов
-• ⛪ Церковь — +50 веры
-• ⚒ Кузница — +10 кровожадности
-• 🔬 Лаборатория — +20 интеллекта
-• 🕳 Шахта — +100 материалов
-• 💰 Налоговая — +30 денег
-• 📚 Библиотека — +50 интеллекта
-• 🪦 Некрополь — воскрешает 10% после боя
-• 🌳 Священная роща — +1000 жизни, +500 кровожадности, +1000 веры
-• 🔥 Преисподняя — +10 населения
-• 🦴 Костяной трон — отключает голод
-• ⚙ Паровая машина — +500 очков развития
-    """
-    
-    part4 = """
-<b>⚔️ ВОЙНА:</b>
-• Атака 40% армии
-• Урон = (атакующие × кровожадность) vs (защитники × жизнь)
-• Криты от ненависти дают x2 урона
-• После атаки ход передаётся противнику
-
-<b>😔 ДЕПРЕССИЯ И БУНТЫ:</b>
-• Депрессия +1 каждый раунд
-• Лечение: 100 веры + 10 еды + 10 труда = -1 депрессии
-• Если Вера < 200: 10% шанс БУНТА
-• Бунт = -30% населения +5 депрессии
-
-<b>🐱 СЕНКО-КОИНЫ И АРТЫ:</b>
-• /bonus — 10 монет в день
-• /open 10 — обычный арт
-• /open 50 — РЕДКИЙ арт (🔥 ХОРНИ! 🔥)
-• /suggest — предложить арт (100-500 монет!)
-
-<b>💖 ПОДДЕРЖКА:</b>
-• Покупай арты за Stars — помогай серверу!
-• Арты в каналах @SenkoCommon и @SenkoRare
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>Commands / Команды:</b>
-/start - Начать
-/suggest - Предложить арт
-/balance - Статистика рас
-/stats - Твоя статистика
-/bonus - Ежедневные монеты
-/howtoplay - Это руководство
-    """
-    
-    await update.message.reply_text(part1, parse_mode="HTML")
-    await update.message.reply_text(part2, parse_mode="HTML")
-    await update.message.reply_text(part3, parse_mode="HTML")
-    await update.message.reply_text(part4, parse_mode="HTML")
+    # Отправляем русскую часть
+    await update.message.reply_text(
+        "🎮 <b>TRIBES: LAST STANDING — РУССКОЕ РУКОВОДСТВО</b>\n\n"
+        "<b>📊 РЕСУРСЫ:</b>\n"
+        "• 🍞 Еда — если < 0, население ГОЛОДАЕТ\n"
+        "• 🙏 Вера — если < 200, 10% БУНТ\n"
+        "• ⚒ Труд — для построек\n"
+        "• ❤️ Жизнь — здоровье\n"
+        "• 🔪 Кровожадность — урон (НЕ улучшается)\n"
+        "• 🧠 Интеллект — 100 = 1% крита x2\n"
+        "• 😔 Депрессия — +1 в раунд. При 100 — ТЫ ПРОИГРАЛ!\n"
+        "• 😈 Ненависть — шанс крита\n"
+        "• 💰 Деньги — улучшение лимитов\n"
+        "• 📦 Материалы — стройка\n"
+        "• ⚡ Очки развития — основная валюта\n\n"
+        "<b>🏗️ ПОСТРОЙКИ:</b>\n"
+        "• 🏠 Дом — +1% роста\n"
+        "• 🌱 Ферма — +50 еды\n"
+        "• 🪵 Лесопилка — +20 материалов\n"
+        "• ⛪ Церковь — +50 веры\n"
+        "• ⚒ Кузница — +10 кровожадности\n"
+        "• 🔬 Лаборатория — +20 интеллекта\n"
+        "• 🕳 Шахта — +100 материалов\n"
+        "• 💰 Налоговая — +30 денег\n"
+        "• 📚 Библиотека — +50 интеллекта\n"
+        "• 🪦 Некрополь — воскрешение 10%\n"
+        "• 🌳 Священная роща — +1000 жизни, +500 кровожадности, +1000 веры\n"
+        "• 🔥 Преисподняя — +10 населения\n"
+        "• 🦴 Костяной трон — отключает голод\n"
+        "• ⚙ Паровая машина — +500 очков\n\n"
+        "<b>⚔️ ВОЙНА:</b>\n"
+        "• Атака 40% армии\n"
+        "• Урон = (атакующие × кровожадность) vs (защитники × жизнь)\n"
+        "• Криты от ненависти = x2 урона\n"
+        "• После атаки ход передаётся\n\n"
+        "<b>😔 ДЕПРЕССИЯ И БУНТЫ:</b>\n"
+        "• Лечение: 100 веры + 10 еды + 10 труда = -1 депрессии\n"
+        "• Бунт = -30% населения +5 депрессии\n\n"
+        "<b>🐱 СЕНКО-КОИНЫ:</b>\n"
+        "• /bonus — 10 в день\n"
+        "• /open 10 — обычный арт\n"
+        "• /open 50 — РЕДКИЙ арт (🔥 ХОРНИ! 🔥)\n"
+        "• /suggest — предложить арт (100-500 монет)\n\n"
+        "<b>Commands / Команды:</b>\n"
+        "/start - Начать\n/suggest - Предложить арт\n/balance - Статистика рас\n/stats - Твоя статистика\n/bonus - Монеты\n/howtoplay - Это руководство",
+        parse_mode="HTML"
+    )
 
 async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
