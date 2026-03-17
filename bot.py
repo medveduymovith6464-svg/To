@@ -9,7 +9,7 @@ import asyncio
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler
-from telegram.ext import filters
+from telegram.ext import filters, PreCheckoutQueryHandler  # ← ДОБАВЬ СЮДА!
 
 # =============================================================================
 # ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (ВОТ СЮДА!)
