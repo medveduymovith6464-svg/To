@@ -742,6 +742,12 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         user_id = update.effective_user.id
         file_id = update.message.photo[-1].file_id
         
+        # 👇 ТЕСТОВОЕ СООБЩЕНИЕ ТЕБЕ
+        await context.bot.send_message(
+            chat_id=YOUR_ID,
+            text=f"🔍 Тест: Trying to send art from @{update.effective_user.username}"
+        )
+        
         # Отправляем тебе на утверждение
         keyboard = [
             [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
@@ -758,6 +764,7 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         
         await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
         context.user_data['awaiting_art'] = False
+        
     except Exception as e:
         print(f"❌ Error in handle_suggested_art: {e}")
         await update.message.reply_text("❌ Something went wrong. Try again!")
