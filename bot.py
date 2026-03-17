@@ -745,7 +745,18 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         user = update.effective_user
         user_name = user.username or user.first_name or str(user_id)
         
-        # 👇 ОТПРАВЛЯЕМ ПРЯМО ПО file_id (без скачивания!)
+        # 👇 ПИШЕМ В ЛОГИ ВСЁ ПОДРЯД
+        print(f"🔥 Получен арт от {user_id}")
+        print(f"📸 file_id: {file_id}")
+        print(f"👤 username: {user_name}")
+        
+        # 👇 ПРОБУЕМ ОТПРАВИТЬ ТЕБЕ ТЕКСТ (для проверки)
+        await context.bot.send_message(
+            chat_id=YOUR_ID,
+            text=f"🔥 Тест: арт от @{user_name} с file_id {file_id}"
+        )
+        
+        # 👇 ТЕПЕРЬ ПРОБУЕМ ФОТО
         keyboard = [
             [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
              InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
@@ -754,7 +765,7 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         
         await context.bot.send_photo(
             chat_id=YOUR_ID,
-            photo=file_id,  # ← ПРЯМО file_id, без файла!
+            photo=file_id,
             caption=f"🆕 New art from @{user_name}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -763,7 +774,15 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data['awaiting_art'] = False
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ ERROR: {e}")
+        # 👇 ПОПРОБУЕМ ОТПРАВИТЬ ТЕБЕ ТЕКСТ ОШИБКИ
+        try:
+            await context.bot.send_message(
+                chat_id=YOUR_ID,
+                text=f"❌ Ошибка при отправке арта: {str(e)}"
+            )
+        except:
+            pass
         await update.message.reply_text("❌ Something went wrong. Try again!")
         context.user_data['awaiting_art'] = False
 
