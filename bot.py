@@ -4,12 +4,12 @@ import random
 import sys
 import sqlite3
 import json
-from datetime import datetime  # ← ЭТО ВАЖНО!
+from datetime import datetime
 import asyncio
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from telegram.ext import filters  # ← ДОБАВЬ ЭТО!
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler
+from telegram.ext import filters
 # =============================================================================
 # ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (ВОТ СЮДА!)
 # =============================================================================
