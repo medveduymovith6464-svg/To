@@ -712,8 +712,9 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
     
-# блок 8
-
+# =============================================================================
+# БЛОК 8: ПРЕДЛОЖИТЬ АРТ (вместо репортов)
+# =============================================================================
 async def suggest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
@@ -756,12 +757,62 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         
         await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
-        context.user_data['awaiting_art'] = False  # ← СБРАСЫВАЕМ ФЛАГ
+        context.user_data['awaiting_art'] = False
     except Exception as e:
         print(f"❌ Error in handle_suggested_art: {e}")
         await update.message.reply_text("❌ Something went wrong. Try again!")
         context.user_data['awaiting_art'] = False
 
+async def suggest_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    rarity = data[1]  # common или rare
+    user_id = int(data[2])
+    file_id = data[3]
+    
+    # Награда (100 за common, 500 за rare)
+    reward = 100 if rarity == "common" else 500
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE neko_coins SET coins = coins + %s WHERE user_id = %s",
+        (reward, user_id)
+    )
+    conn.commit()
+    conn.close()
+    
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🎉 Your art was approved as {rarity}!\n💰 +{reward} Senko Coins!"
+        )
+    except:
+        pass
+    
+    await query.edit_message_caption(
+        caption=f"✅ Approved as {rarity}! +{reward} coins to user."
+    )
+
+async def suggest_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    user_id = int(data[2])
+    
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="😔 Your art wasn't approved. Try again!"
+        )
+    except:
+        pass
+    
+    await query.edit_message_caption(caption="❌ Rejected")
+    
 # =============================================================================
 # БЛОК 8.5: РАССЫЛКА (только для тебя)
 # =============================================================================
