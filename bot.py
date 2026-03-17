@@ -1398,10 +1398,36 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_round += 1
         active_rooms[room_id]["round"] = current_round
     
+    # 👇 ПРОВЕРКА НА ЭЛЬФА (5% шанс украсть ход)
+    stolen = False
+    steal_text = ""
+    if player.race_id == "elf" and random.randint(1, 100) <= 5:
+        # Крадём ход — оставляем текущего игрока
+        other_player = player
+        stolen = True
+        
+        # Получаем имя для сообщения
+        try:
+            chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
+            player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
+        except:
+            player_name = str(player.user_id)
+        
+        if lang == "en":
+            steal_text = f"🧝 <b>Elf ability!</b>\n{player_name} stole the turn!"
+        else:
+            steal_text = f"🧝 <b>Способность эльфа!</b>\n{player_name} украл ход!"
+    
+    # Если не украли — нормальная смена хода
+    if not stolen:
+        active_rooms[room_id]["allowed"] = [other_player.user_id]
+        active_rooms[room_id]["current_player"] = other_player.user_id
+    else:
+        active_rooms[room_id]["allowed"] = [player.user_id]
+        active_rooms[room_id]["current_player"] = player.user_id
+    
     # Увеличиваем номер хода
     active_rooms[room_id]["turn"] = current_turn + 1
-    active_rooms[room_id]["allowed"] = [other_player.user_id]
-    active_rooms[room_id]["current_player"] = other_player.user_id
     
     # 👇 ВЫЗЫВАЕМ next_round И ПОЛУЧАЕМ СПИСОК СОБЫТИЙ
     events = await next_round(room_id, context)
@@ -1409,7 +1435,20 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await check_game_over(room_id, context):
         return
     
-    # 👇 ЕСЛИ БЫЛИ СОБЫТИЯ — ПОКАЗЫВАЕМ ИХ И СОХРАНЯЕМ ID
+    # 👇 ЕСЛИ БЫЛА КРАЖА — ПОКАЗЫВАЕМ ОТДЕЛЬНОЕ СООБЩЕНИЕ
+    if stolen:
+        back_keyboard = [[InlineKeyboardButton("🔙 Back" if lang == "en" else "🔙 Назад", 
+                                              callback_data=f"delete_steal_{room_id}_{target_user_id}")]]
+        
+        sent_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text=steal_text,
+            reply_markup=InlineKeyboardMarkup(back_keyboard),
+            parse_mode="HTML"
+        )
+        active_rooms[room_id]["steal_msg_id"] = sent_msg.message_id
+    
+    # 👇 ЕСЛИ БЫЛИ СОБЫТИЯ — ПОКАЗЫВАЕМ ИХ
     if events:
         if lang == "en":
             event_title = "🎲 <b>EVENTS THIS ROUND!</b>"
@@ -1422,7 +1461,6 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"delete_events_{room_id}_{other_player.user_id}")]]
         
-        # Отправляем и сохраняем ID сообщения
         sent_msg = await context.bot.send_message(
             chat_id=chat_id,
             text=events_text,
@@ -1518,6 +1556,63 @@ async def delete_events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "🎮 <b>Меню игры</b>" if lang == "ru" else "🎮 <b>Game Menu</b>",
+        reply_markup=InlineKeyboardMarkup(game_keyboard),
+        parse_mode="HTML"
+    )
+
+async def delete_steal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Удаляет сообщение о краже хода"""
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[2:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    # Удаляем сообщение о краже
+    if "steal_msg_id" in active_rooms[room_id]:
+        try:
+            await context.bot.delete_message(
+                chat_id=active_rooms[room_id]["chat_id"],
+                message_id=active_rooms[room_id]["steal_msg_id"]
+            )
+        except:
+            pass
+    
+    # Возвращаем игровое меню
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    if lang == "en":
+        my_city_text = "🏛 My City"
+        build_text = "⚒ Build"
+        war_text = "⚔️ War"
+        end_turn_text = "⏭ End Turn"
+        income_text = "📊 Income"
+    else:
+        my_city_text = "🏛 Мой город"
+        build_text = "⚒ Строить"
+        war_text = "⚔️ Война"
+        end_turn_text = "⏭ Завершить ход"
+        income_text = "📊 Доход"
+    
+    game_keyboard = [
+        [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton(war_text, callback_data=f"war_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
+    ]
+    
+    menu_text = "🎮 <b>Game Menu</b>" if lang == "en" else "🎮 <b>Меню игры</b>"
+    
+    await query.edit_message_text(
+        menu_text,
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
@@ -2436,6 +2531,7 @@ def run_bot():
     # Потом выбор расы и язык
     app.add_handler(CallbackQueryHandler(confirm_endturn, pattern="confirm_endturn_"))
     app.add_handler(CallbackQueryHandler(cancel_endturn, pattern="cancel_endturn_"))
+    app.add_handler(CallbackQueryHandler(delete_steal, pattern="delete_steal_"))
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
