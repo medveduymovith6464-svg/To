@@ -29,6 +29,7 @@ GAME_NAME = "Tribes: Last Standing"
 # =============================================================================
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import datetime
 
 def get_db():
     """Возвращает подключение к Neon PostgreSQL"""
@@ -60,11 +61,25 @@ def init_db():
             room_id TEXT
         )""")
         
-        # 👇 НОВАЯ ТАБЛИЦА ДЛЯ СЕНКО-КОИНОВ
+        # Таблица для Сенко-коинов
         c.execute("""CREATE TABLE IF NOT EXISTS neko_coins (
             user_id BIGINT PRIMARY KEY,
             coins INTEGER DEFAULT 0,
             last_bonus DATE
+        )""")
+        
+        # Таблица для еженедельной статистики
+        c.execute("""CREATE TABLE IF NOT EXISTS weekly_stats (
+            id SERIAL PRIMARY KEY,
+            week_start DATE,
+            race TEXT,
+            wins INTEGER DEFAULT 0
+        )""")
+        
+        # Таблица для хранения даты последнего сброса
+        c.execute("""CREATE TABLE IF NOT EXISTS reset_log (
+            id SERIAL PRIMARY KEY,
+            last_reset DATE
         )""")
         
         conn.commit()
@@ -133,6 +148,41 @@ def save_game(winner_race, winner_id, players_data, room_id):
         conn.close()
     except Exception as e:
         print(f"❌ Ошибка при сохранении игры: {e}")
+
+async def check_weekly_reset():
+    """Проверяет, не пора ли сбросить статистику"""
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Узнаём, когда был последний сброс
+    c.execute("SELECT last_reset FROM reset_log ORDER BY id DESC LIMIT 1")
+    last_reset = c.fetchone()
+    
+    today = datetime.now().date()
+    
+    # Если никогда не сбрасывали или прошло больше 7 дней
+    if not last_reset or (today - last_reset['last_reset']).days >= 7:
+        print("🔄 Сбрасываем еженедельную статистику...")
+        
+        # Сохраняем текущую статистику в weekly_stats (на всякий случай)
+        c.execute("""
+            INSERT INTO weekly_stats (week_start, race, wins)
+            SELECT %s, winner_race, COUNT(*)
+            FROM games
+            WHERE date >= %s
+            GROUP BY winner_race
+        """, (today - datetime.timedelta(days=7), last_reset['last_reset'] if last_reset else today))
+        
+        # Очищаем таблицу games (если хочешь удалять старые игры)
+        c.execute("DELETE FROM games")
+        
+        # Записываем дату сброса
+        c.execute("INSERT INTO reset_log (last_reset) VALUES (%s)", (today,))
+        
+        conn.commit()
+        print("✅ Статистика сброшена!")
+    
+    conn.close()
 
 # Инициализация при запуске
 init_db()
@@ -672,17 +722,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM games")
+    
+    # Считаем игры ЗА ПОСЛЕДНИЕ 7 ДНЕЙ
+    week_ago = datetime.now().date() - datetime.timedelta(days=7)
+    c.execute("SELECT COUNT(*) FROM games WHERE date >= %s", (week_ago,))
     total_games = c.fetchone()[0]
     
     if total_games == 0:
-        await update.message.reply_text("📊 No games yet.", parse_mode="HTML")
+        await update.message.reply_text("📊 No games this week.", parse_mode="HTML")
         conn.close()
         return
     
-    text = "📊 <b>BALANCE REPORT</b>\n"
+    text = "📊 <b>BALANCE REPORT (last 7 days)</b>\n"
     for race_id, race_data in RACES.items():
-        c.execute("SELECT COUNT(*) FROM games WHERE winner_race = %s", (race_id,))
+        c.execute("SELECT COUNT(*) FROM games WHERE winner_race = %s AND date >= %s", (race_id, week_ago))
         wins = c.fetchone()[0]
         winrate = (wins / total_games * 100) if total_games > 0 else 0
         status = "🔥" if winrate > 27 else "💩" if winrate < 20 else "✅"
@@ -3213,7 +3266,7 @@ def run_bot():
     async def load_arts(context):
         await reload_arts_from_channels(app.bot)
     app.job_queue.run_once(load_arts, 0)
-    
+    asyncio.create_task(check_weekly_reset())
     # ========== ОСНОВНЫЕ КОМАНДЫ ==========
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("suggest", suggest))
