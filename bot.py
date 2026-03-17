@@ -2900,8 +2900,10 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # 👇 ЗАГРУЗКА АРТОВ ПРИ СТАРТЕ
-    asyncio.create_task(reload_arts_from_channels(app.bot))
+    # 👇 ЗАГРУЗКА АРТОВ ПРИ СТАРТЕ (исправлено!)
+    async def load_arts(context):
+        await reload_arts_from_channels(app.bot)
+    app.job_queue.run_once(load_arts, 0)
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report))
@@ -2959,6 +2961,12 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="buy_art_10"))
     app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="buy_art_50"))
     app.add_handler(CallbackQueryHandler(bonus_back, pattern="bonus_back"))
+    
+    # Обработчики для звёзд
+    app.add_handler(CallbackQueryHandler(buy_star, pattern="buy_star_1"))
+    app.add_handler(CallbackQueryHandler(buy_star, pattern="buy_star_5"))
+    app.add_handler(PreCheckoutQueryHandler(pre_checkout))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     # ============================================
    
     app.run_polling()
