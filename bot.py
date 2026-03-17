@@ -2810,6 +2810,85 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def buy_star(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    cost = 1 if "1" in query.data else 5
+    rarity = "common" if cost == 1 else "rare"
+    user_id = query.from_user.id
+    
+    # Проверяем, есть ли арты в этой категории
+    if not SENKO_ARTS.get(rarity):
+        await query.edit_message_text(
+            f"❌ No {rarity} arts available yet!\nTry again later.",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Создаём инвойс для оплаты
+    try:
+        invoice_link = await context.bot.create_invoice_link(
+            title="🎨 Senko Art",
+            description=f"Get a random {rarity} Senko art!",
+            payload=f"art_{rarity}_{user_id}_{random.randint(1000,9999)}",
+            provider_token="",  # Для Stars оставляем пустым
+            currency="XTR",       # XTR = Telegram Stars
+            prices=[{"label": f"{rarity.capitalize()} Art", "amount": cost}]
+        )
+        
+        # Отправляем ссылку на оплату
+        await query.edit_message_text(
+            f"⭐ <b>Pay {cost} Star{'s' if cost > 1 else ''}</b>\n\n"
+            f"[Click here to pay]({invoice_link})\n\n"
+            f"After payment, you'll automatically receive your art!",
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        await query.edit_message_text(f"❌ Error: {e}")
+        print(f"❌ Invoice error: {e}")
+
+async def pre_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обязательно подтверждаем оплату"""
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выдаём арт после успешной оплаты"""
+    user_id = update.effective_user.id
+    payment = update.message.successful_payment
+    
+    # Парсим payload, чтобы узнать, какой арт нужен
+    try:
+        payload_parts = payment.invoice_payload.split("_")
+        rarity = payload_parts[1]  # common или rare
+    except:
+        rarity = "common"  # на всякий случай
+    
+    # Берём случайный арт из нужной категории
+    if SENKO_ARTS.get(rarity) and SENKO_ARTS[rarity]:
+        file_id = random.choice(SENKO_ARTS[rarity])
+        
+        # Отправляем арт
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo=file_id,
+            caption=f"🎨 <b>Thank you for your support!</b>\n\nHere's your {rarity} Senko art! ❤️",
+            parse_mode="HTML"
+        )
+        
+        # Подтверждение в чат
+        await update.message.reply_text(
+            f"✅ Art sent! Check your PM."
+        )
+    else:
+        # Если артов нет (маловероятно, но вдруг)
+        await update.message.reply_text(
+            f"✅ Payment received! But no arts available yet.\n"
+            f"We'll add them soon!"
+        )
+
 async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
