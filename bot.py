@@ -740,37 +740,24 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
     
     try:
         user_id = update.effective_user.id
-        photo = update.message.photo[-1]
-        file_id = photo.file_id
+        file_id = update.message.photo[-1].file_id
         
         user = update.effective_user
         user_name = user.username or user.first_name or str(user_id)
         
-        # Создаём папку если нет
-        os.makedirs("/tmp/suggested_arts", exist_ok=True)
+        # 👇 ОТПРАВЛЯЕМ ПРЯМО ПО file_id (без скачивания!)
+        keyboard = [
+            [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
+             InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
+            [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
+        ]
         
-        # Скачиваем
-        file = await context.bot.get_file(file_id)
-        file_path = f"/tmp/suggested_arts/art_{user_id}_{random.randint(1000,9999)}.jpg"
-        await file.download_to_drive(file_path)
-        
-        # Отправляем тебе
-        with open(file_path, 'rb') as f:
-            keyboard = [
-                [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
-                 InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
-                [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
-            ]
-            
-            await context.bot.send_photo(
-                chat_id=YOUR_ID,
-                photo=f,
-                caption=f"🆕 New art from @{user_name}",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        
-        # Удаляем временный файл
-        os.remove(file_path)
+        await context.bot.send_photo(
+            chat_id=YOUR_ID,
+            photo=file_id,  # ← ПРЯМО file_id, без файла!
+            caption=f"🆕 New art from @{user_name}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         
         await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
         context.user_data['awaiting_art'] = False
