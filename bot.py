@@ -712,15 +712,17 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
     
-# =============================================================================
-# БЛОК 8: ПРЕДЛОЖИТЬ АРТ (вместо репортов)
-# =============================================================================
+# блок 8
+
 async def suggest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     # Проверяем, не спамит ли
     if context.user_data.get('awaiting_art'):
-        await update.message.reply_text("⏳ Сначала отправь предыдущий арт!")
+        await update.message.reply_text(
+            "❌ You already have a pending art!\n"
+            "Please wait for it to be reviewed."
+        )
         return
     
     await update.message.reply_text(
@@ -735,75 +737,30 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
     if not context.user_data.get('awaiting_art'):
         return
     
-    user_id = update.effective_user.id
-    file_id = update.message.photo[-1].file_id
-    
-    # Отправляем тебе на утверждение
-    keyboard = [
-        [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
-         InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
-        [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
-    ]
-    
-    await context.bot.send_photo(
-        chat_id=YOUR_ID,
-        photo=file_id,
-        caption=f"🆕 New art from @{update.effective_user.username}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    
-    await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
-    context.user_data['awaiting_art'] = False
-
-async def suggest_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data.split("_")
-    rarity = data[1]  # common или rare
-    user_id = int(data[2])
-    file_id = data[3]
-    
-    # 👇 НАГРАДА (100 за common, 500 за rare)
-    reward = 100 if rarity == "common" else 500
-    
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        "UPDATE neko_coins SET coins = coins + %s WHERE user_id = %s",
-        (reward, user_id)
-    )
-    conn.commit()
-    conn.close()
-    
     try:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"🎉 Your art was approved as {rarity}!\n💰 +{reward} Senko Coins!"
+        user_id = update.effective_user.id
+        file_id = update.message.photo[-1].file_id
+        
+        # Отправляем тебе на утверждение
+        keyboard = [
+            [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
+             InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
+            [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
+        ]
+        
+        await context.bot.send_photo(
+            chat_id=YOUR_ID,
+            photo=file_id,
+            caption=f"🆕 New art from @{update.effective_user.username}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    except:
-        pass
-    
-    await query.edit_message_caption(
-        caption=f"✅ Approved as {rarity}! +{reward} coins to user."
-    )
-
-async def suggest_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data.split("_")
-    user_id = int(data[2])
-    
-    try:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="😔 Your art wasn't approved. Try again!"
-        )
-    except:
-        pass
-    
-    await query.edit_message_caption(caption="❌ Rejected")
+        
+        await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
+        context.user_data['awaiting_art'] = False  # ← СБРАСЫВАЕМ ФЛАГ
+    except Exception as e:
+        print(f"❌ Error in handle_suggested_art: {e}")
+        await update.message.reply_text("❌ Something went wrong. Try again!")
+        context.user_data['awaiting_art'] = False
 
 # =============================================================================
 # БЛОК 8.5: РАССЫЛКА (только для тебя)
