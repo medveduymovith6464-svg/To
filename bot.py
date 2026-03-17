@@ -2187,27 +2187,30 @@ async def cure_depression(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     lang = active_rooms[room_id].get("lang", "en")
     
-    # Лечение: тратим веру+еду+труд = уменьшаем депрессию
-    cure_amount = 10  # лечим 10 депрессии за раз
+    # 👇 ТЕПЕРЬ ЛЕЧЕНИЕ ТРАТИТ 100 ВЕРЫ (а не 10)
+    cure_amount = 1  # лечим 1 депрессии
+    faith_cost = 100  # тратим 100 веры
+    food_cost = 10
+    labor_cost = 10
     
-    if player.faith >= cure_amount and player.food >= cure_amount and player.labor >= cure_amount:
-        player.faith -= cure_amount
-        player.food -= cure_amount
-        player.labor -= cure_amount
+    if player.faith >= faith_cost and player.food >= food_cost and player.labor >= labor_cost:
+        player.faith -= faith_cost
+        player.food -= food_cost
+        player.labor -= labor_cost
         player.depression = max(0, player.depression - cure_amount)
         
         if lang == "en":
-            text = f"✅ <b>Depression cured!</b>\nReduced by {cure_amount}\nCurrent: {player.depression}"
+            text = f"✅ <b>Depression cured!</b>\nReduced by {cure_amount}\nCurrent: {player.depression}\nFaith left: {player.faith}"
             back_text = "🔙 Back to City"
         else:
-            text = f"✅ <b>Депрессия вылечена!</b>\nУменьшена на {cure_amount}\nТекущая: {player.depression}"
+            text = f"✅ <b>Депрессия вылечена!</b>\nУменьшена на {cure_amount}\nТекущая: {player.depression}\nВеры осталось: {player.faith}"
             back_text = "🔙 В город"
     else:
         if lang == "en":
-            text = f"❌ <b>Not enough resources!</b>\nNeed: {cure_amount} Faith, {cure_amount} Food, {cure_amount} Labor"
+            text = f"❌ <b>Not enough resources!</b>\nNeed: {faith_cost} Faith, {food_cost} Food, {labor_cost} Labor"
             back_text = "🔙 Back"
         else:
-            text = f"❌ <b>Не хватает ресурсов!</b>\nНужно: {cure_amount} Веры, {cure_amount} Еды, {cure_amount} Труда"
+            text = f"❌ <b>Не хватает ресурсов!</b>\nНужно: {faith_cost} Веры, {food_cost} Еды, {labor_cost} Труда"
             back_text = "🔙 Назад"
     
     back_button = [[InlineKeyboardButton(back_text, callback_data=f"mycity_{room_id}_{target_user_id}")]]
