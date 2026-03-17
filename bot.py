@@ -432,6 +432,169 @@ BUILDINGS = {
 }
 
 # =============================================================================
+# БЛОК: СОБЫТИЯ (вставь после BUILDINGS, до БЛОКА 4)
+# =============================================================================
+import random
+
+EVENTS = [
+    # 0.1% - Эпические
+    {
+        "name_en": "🦽 Disabled Robbery",
+        "name_ru": "🦽 Ограбление инвалида",
+        "desc_en": "You robbed a disabled person. +10 to random resource.",
+        "desc_ru": "Вы обокрали бедного инвалида без рук. +10 к случайному ресурсу.",
+        "chance": 0.1,
+        "effect": lambda p: add_random_resource(p, 10)
+    },
+    {
+        "name_en": "👘 Senko's Visit",
+        "name_ru": "🦊 Сенко в гостях",
+        "desc_en": "Senko in Niko's outfit asks you to stop fighting. YOU LOSE!",
+        "desc_ru": "Сенко в костюме Нико попросила не драться! ВЫ ПРОИГРАЛИ!",
+        "chance": 0.1,
+        "effect": lambda p: senko_ends_game(p)  # особая функция
+    },
+    
+    # 1% - Редкие
+    {
+        "name_en": "🍺 Gods with Beer",
+        "name_ru": "🍺 Боги с пивом",
+        "desc_en": "Gods descended and offered you beer. -5000 depression!",
+        "desc_ru": "К вам спустились боги и предложили пиво. -5000 депрессии!",
+        "chance": 1,
+        "effect": lambda p: setattr(p, 'depression', max(0, p.depression - 5000))
+    },
+    {
+        "name_en": "👖 Commander's Bet",
+        "name_ru": "👖 Спор командира",
+        "desc_en": "Commander bet he'd eat his pants and lost. +10 gold, -1 population.",
+        "desc_ru": "Командир поспорил, что съест трусы и проиграл. +10 золота, -1 население.",
+        "chance": 1,
+        "effect": lambda p: (setattr(p, 'money', p.money + 10), 
+                            setattr(p, 'population', max(1, p.population - 1)))
+    },
+    
+    # 3-5.9% - Средние
+    {
+        "name_en": "👮 Tax Police",
+        "name_ru": "👮 Налоговая полиция",
+        "desc_en": "TAX POLICE, OPEN UP! -100% money, -50% food!",
+        "desc_ru": "ЭТО НАЛОГОВАЯ, ОТКРЫВАЙТЕ! -100% денег, -50% еды!",
+        "chance": 5.9,
+        "effect": lambda p: (setattr(p, 'money', 0), 
+                            setattr(p, 'food', p.food // 2))
+    },
+    {
+        "name_en": "🔥 Homeless Fire",
+        "name_ru": "🔥 Костёр бомжа",
+        "desc_en": "A homeless man wanted to warm up and lit a fire. -30% materials.",
+        "desc_ru": "Бомж захотел согреться и разжёг костёр. -30% материалов.",
+        "chance": 5,
+        "effect": lambda p: setattr(p, 'materials', int(p.materials * 0.7))
+    },
+    {
+        "name_en": "👵 Grandma's Stash",
+        "name_ru": "👵 Бабушкина заначка",
+        "desc_en": "Your grandma died and you found her stash! +250 money.",
+        "desc_ru": "Ваша бабушка умерла и вы нашли её заначку! +250 денег.",
+        "chance": 5,
+        "effect": lambda p: setattr(p, 'money', p.money + 250)
+    },
+    
+    # 5-10% - Частые
+    {
+        "name_en": "😔 Unrest",
+        "name_ru": "😔 Смута",
+        "desc_en": "DAMN UNREST! +50 depression, -250 faith.",
+        "desc_ru": "ЕБАННАЯ СМУТА! +50 депрессии, -250 веры.",
+        "chance": 5,
+        "effect": lambda p: (setattr(p, 'depression', p.depression + 50),
+                            setattr(p, 'faith', max(0, p.faith - 250)))
+    },
+    {
+        "name_en": "💸 Tribute",
+        "name_ru": "💸 Дань",
+        "desc_en": "PAY TRIBUTE! -150 food, money, labor.",
+        "desc_ru": "ПЛАТИ ДАНЬ! -150 к еде, деньгам, труду.",
+        "chance": 7.9,
+        "effect": lambda p: (setattr(p, 'food', max(0, p.food - 150)),
+                            setattr(p, 'money', max(0, p.money - 150)),
+                            setattr(p, 'labor', max(0, p.labor - 150)))
+    },
+    {
+        "name_en": "🌾 Farmer Dream",
+        "name_ru": "🌾 Сон фермера",
+        "desc_en": "You dreamed you were a farmer. But you're not. -50 food.",
+        "desc_ru": "Вам приснилось, что вы фермер. Но вы не фермер. -50 еды.",
+        "chance": 10,
+        "effect": lambda p: setattr(p, 'food', max(0, p.food - 50))
+    },
+    {
+        "name_en": "🇨🇳 Chinese Guy",
+        "name_ru": "🇨🇳 Китаец",
+        "desc_en": "You saw a Chinese guy! -10% population.",
+        "desc_ru": "Вы увидели китайца! -10% населения.",
+        "chance": 10,
+        "effect": lambda p: setattr(p, 'population', int(p.population * 0.9))
+    },
+    {
+        "name_en": "🎭 Jester",
+        "name_ru": "🎭 Шут",
+        "desc_en": "You hired a jester... but now everyone thinks YOU'RE the jester. -30% labor, -1 money.",
+        "desc_ru": "Вы наняли шута... но теперь вас считают шутом. -30% труда, -1 монета.",
+        "chance": 10,
+        "effect": lambda p: (setattr(p, 'labor', int(p.labor * 0.7)),
+                            setattr(p, 'money', max(0, p.money - 1)))
+    },
+    {
+        "name_en": "✨ Winx Club",
+        "name_ru": "✨ Винкс",
+        "desc_en": "WINX TOGETHER WE ARE STRONG! +100 health.",
+        "desc_ru": "ВИНКС ТОЛЬКО ВМЕСТЕ МЫ СИЛЬНЫ! +100 к жизни.",
+        "chance": 10,
+        "effect": lambda p: setattr(p, 'health', p.health + 100)
+    },
+    {
+        "name_en": "👶 Baby Boom",
+        "name_ru": "👶 Бейби бум",
+        "desc_en": "BABY BOOOOOOM! -20 population.",
+        "desc_ru": "БЕЙБИ БУУУУУУУМ! -20 населения.",
+        "chance": 10,
+        "effect": lambda p: setattr(p, 'population', max(1, p.population - 20))
+    },
+    {
+        "name_en": "🧙 Shaman Scam",
+        "name_ru": "🧙 Шаманка",
+        "desc_en": "A shaman scammed you. -5 money, -100 food.",
+        "desc_ru": "Вас наебала Шаманка. -5 монет, -100 еды.",
+        "chance": 10,
+        "effect": lambda p: (setattr(p, 'money', max(0, p.money - 5)),
+                            setattr(p, 'food', max(0, p.food - 100)))
+    },
+    {
+        "name_en": "🌍 African Children",
+        "name_ru": "🌍 Африканские дети",
+        "desc_en": "You remembered African children while drinking water. -30% food.",
+        "desc_ru": "Вы вспомнили африканских детей, когда пили воду. -30% еды.",
+        "chance": 10,
+        "effect": lambda p: setattr(p, 'food', int(p.food * 0.7))
+    }
+]
+
+def add_random_resource(player, amount):
+    """Добавляет +amount к случайному ресурсу"""
+    resources = ['food', 'faith', 'labor', 'health', 'intelligence', 'money', 'materials', 'dev_points']
+    chosen = random.choice(resources)
+    current = getattr(player, chosen)
+    setattr(player, chosen, current + amount)
+
+def senko_ends_game(player):
+    """Сенко завершает игру для этого игрока"""
+    player.population = 0
+    player.depression = 9999
+    # Функция check_game_over потом подхватит
+
+# =============================================================================
 # БЛОК 4: ВСПОМОГАТЕЛЬНЫЙ ФЛАСК (только чтобы Render не ругался)
 # =============================================================================
 
@@ -1031,11 +1194,26 @@ async def check_game_over(room_id, context):
     return False
 
 async def next_round(room_id, context):
-    """Начисляет доходы и расходы за раунд"""
+    """Начисляет доходы, расходы и события за раунд"""
     if room_id not in active_rooms:
         return
     
     players = active_rooms[room_id].get("players", [])
+    current_round = active_rooms[room_id].get("round", 1)
+    chat_id = active_rooms[room_id]["chat_id"]
+    
+    # 👇 ПРОВЕРКА НА 100 РАУНД (ГАРАНТИРОВАННАЯ СЕНКО)
+    if current_round >= 100:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🦊 <b>СЕНКО В ГОСТЯХ!</b>\n\n"
+                 "На 100 раунде к вам пришла Сенко в костюме Нико и сказала:\n"
+                 "✨ <i>«Вы так долго играли... Пора отдохнуть!»</i>\n\n"
+                 "Игра завершена. Все молодцы! 🏆",
+            parse_mode="HTML"
+        )
+        del active_rooms[room_id]
+        return
     
     for player in players:
         # 1. ДОХОД ОТ ЗДАНИЙ
@@ -1050,12 +1228,39 @@ async def next_round(room_id, context):
         # 2. БАЗОВЫЙ ДОХОД ЗА РАУНД (500 очков)
         player.dev_points += 500
         
-        # 3. 👇 ПРОЦЕНТНЫЙ РОСТ ОТ ДОМОВ
+        # 3. ПРОЦЕНТНЫЙ РОСТ ОТ ДОМОВ
         if player.population_growth > 0:
             growth = int(player.population * player.population_growth / 100)
-            player.population += max(1, growth)  # минимум +1, если есть дома
+            player.population += max(1, growth)
         
-        # 4. РАСХОДЫ (ЕДА)
+        # 4. 👇 СОБЫТИЯ ДЛЯ КАЖДОГО ИГРОКА (75% шанс)
+        if random.randint(1, 100) <= 75:  # 75% шанс
+            # Выбираем событие по шансам
+            events_pool = []
+            for event in EVENTS:
+                # 0.1% -> 1, 1% -> 10, 5% -> 50, 10% -> 100
+                weight = int(event["chance"] * 10)
+                events_pool.extend([event] * weight)
+            
+            chosen_event = random.choice(events_pool)
+            
+            # Применяем эффект к игроку
+            chosen_event["effect"](player)
+            
+            # Отправляем сообщение в чат
+            lang = active_rooms[room_id].get("lang", "en")
+            if lang == "en":
+                event_text = f"🎲 <b>Event for @{player.user_id}:</b>\n{chosen_event['desc_en']}"
+            else:
+                event_text = f"🎲 <b>Событие для @{player.user_id}:</b>\n{chosen_event['desc_ru']}"
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=event_text,
+                parse_mode="HTML"
+            )
+        
+        # 5. РАСХОДЫ (ЕДА)
         food_consumed = player.calculate_food_consumption()
         player.food -= food_consumed
         
@@ -1065,11 +1270,11 @@ async def next_round(room_id, context):
             player.population = max(0, player.population - starvation)
             player.food = 0
         
-        # 5. ДЕПРЕССИЯ
+        # 6. ДЕПРЕССИЯ
         player.depression += 1
         player.apply_depression()
         
-        # 6. ЛИМИТЫ
+        # 7. ЛИМИТЫ
         player.food = min(player.food, player.food_limit)
         player.faith = min(player.faith, player.faith_limit)
         player.labor = min(player.labor, player.labor_limit)
