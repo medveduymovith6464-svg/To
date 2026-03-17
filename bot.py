@@ -740,37 +740,43 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
     
     try:
         user_id = update.effective_user.id
-        file_id = update.message.photo[-1].file_id
+        photo = update.message.photo[-1]
+        file_id = photo.file_id
         
-        # Получаем имя (username или first_name)
         user = update.effective_user
         user_name = user.username or user.first_name or str(user_id)
         
-        # 👇 ТЕСТОВОЕ СООБЩЕНИЕ ТЕБЕ
-        await context.bot.send_message(
-            chat_id=YOUR_ID,
-            text=f"🔍 Тест: Trying to send art from @{user_name}"
-        )
+        # Создаём папку если нет
+        os.makedirs("/tmp/suggested_arts", exist_ok=True)
         
-        # Отправляем тебе на утверждение
-        keyboard = [
-            [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
-             InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
-            [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
-        ]
+        # Скачиваем
+        file = await context.bot.get_file(file_id)
+        file_path = f"/tmp/suggested_arts/art_{user_id}_{random.randint(1000,9999)}.jpg"
+        await file.download_to_drive(file_path)
         
-        await context.bot.send_photo(
-            chat_id=YOUR_ID,
-            photo=file_id,
-            caption=f"🆕 New art from @{user_name}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        # Отправляем тебе
+        with open(file_path, 'rb') as f:
+            keyboard = [
+                [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
+                 InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
+                [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
+            ]
+            
+            await context.bot.send_photo(
+                chat_id=YOUR_ID,
+                photo=f,
+                caption=f"🆕 New art from @{user_name}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        
+        # Удаляем временный файл
+        os.remove(file_path)
         
         await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
         context.user_data['awaiting_art'] = False
         
     except Exception as e:
-        print(f"❌ Error in handle_suggested_art: {e}")
+        print(f"❌ Error: {e}")
         await update.message.reply_text("❌ Something went wrong. Try again!")
         context.user_data['awaiting_art'] = False
 
