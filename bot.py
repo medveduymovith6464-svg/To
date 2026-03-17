@@ -713,19 +713,97 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
 # =============================================================================
-# БЛОК 8: РЕПОРТЫ (отправка багов тебе в личку)
+# БЛОК 8: ПРЕДЛОЖИТЬ АРТ (вместо репортов)
 # =============================================================================
-async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("🐛 Use: /report [your message]", parse_mode="HTML")
+async def suggest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Проверяем, не спамит ли
+    if context.user_data.get('awaiting_art'):
+        await update.message.reply_text("⏳ Сначала отправь предыдущий арт!")
         return
     
-    await context.bot.send_message(
-        chat_id=YOUR_ID,
-        text=f"🐞 <b>Bug from @{update.effective_user.username}</b>\n{''.join(context.args)}",
+    await update.message.reply_text(
+        "🎨 <b>Suggest an art</b>\n\n"
+        "Send me a picture you want to add to the game!\n"
+        "If I approve it, you'll get Senko Coins!",
         parse_mode="HTML"
     )
-    await update.message.reply_text("✅ Thanks! Bug reported.", parse_mode="HTML")
+    context.user_data['awaiting_art'] = True
+
+async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get('awaiting_art'):
+        return
+    
+    user_id = update.effective_user.id
+    file_id = update.message.photo[-1].file_id
+    
+    # Отправляем тебе на утверждение
+    keyboard = [
+        [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
+         InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
+        [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
+    ]
+    
+    await context.bot.send_photo(
+        chat_id=YOUR_ID,
+        photo=file_id,
+        caption=f"🆕 New art from @{update.effective_user.username}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    await update.message.reply_text("✅ Thanks! Your art has been sent for review!")
+    context.user_data['awaiting_art'] = False
+
+async def suggest_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    rarity = data[1]  # common или rare
+    user_id = int(data[2])
+    file_id = data[3]
+    
+    # 👇 НАГРАДА (100 за common, 500 за rare)
+    reward = 100 if rarity == "common" else 500
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE neko_coins SET coins = coins + %s WHERE user_id = %s",
+        (reward, user_id)
+    )
+    conn.commit()
+    conn.close()
+    
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🎉 Your art was approved as {rarity}!\n💰 +{reward} Senko Coins!"
+        )
+    except:
+        pass
+    
+    await query.edit_message_caption(
+        caption=f"✅ Approved as {rarity}! +{reward} coins to user."
+    )
+
+async def suggest_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    user_id = int(data[2])
+    
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="😔 Your art wasn't approved. Try again!"
+        )
+    except:
+        pass
+    
+    await query.edit_message_caption(caption="❌ Rejected")
 
 # =============================================================================
 # БЛОК 8.5: РАССЫЛКА (только для тебя)
@@ -2980,13 +3058,13 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # 👇 ЗАГРУЗКА АРТОВ ПРИ СТАРТЕ (исправлено!)
+    # Загружаем арты при старте
     async def load_arts(context):
         await reload_arts_from_channels(app.bot)
     app.job_queue.run_once(load_arts, 0)
     
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("report", report))
+    app.add_handler(CommandHandler("suggest", suggest))  # ← ВМЕСТО report
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("stats", my_stats))
     
@@ -3047,6 +3125,12 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(buy_star, pattern="buy_star_5"))
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
+    
+    # ========== ОБРАБОТЧИКИ ДЛЯ ПРЕДЛОЖЕНИЙ ==========
+    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_suggested_art))
+    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="suggest_common_"))
+    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="suggest_rare_"))
+    app.add_handler(CallbackQueryHandler(suggest_reject, pattern="suggest_reject_"))
     # ============================================
    
     app.run_polling()
