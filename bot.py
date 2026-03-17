@@ -718,7 +718,6 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def suggest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Проверяем, не спамит ли
     if context.user_data.get('awaiting_art'):
         await update.message.reply_text(
             "❌ You already have a pending art!\n"
@@ -745,22 +744,16 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         user = update.effective_user
         user_name = user.username or user.first_name or str(user_id)
         
-        # 👇 ПИШЕМ В ЛОГИ ВСЁ ПОДРЯД
-        print(f"🔥 Получен арт от {user_id}")
-        print(f"📸 file_id: {file_id}")
-        print(f"👤 username: {user_name}")
+        # 👇 БЕРЁМ ТОЛЬКО ПОСЛЕДНИЕ 20 СИМВОЛОВ file_id
+        short_file_id = file_id[-20:] if len(file_id) > 20 else file_id
         
-        # 👇 ПРОБУЕМ ОТПРАВИТЬ ТЕБЕ ТЕКСТ (для проверки)
-        await context.bot.send_message(
-            chat_id=YOUR_ID,
-            text=f"🔥 Тест: арт от @{user_name} с file_id {file_id}"
-        )
+        # Сохраняем полный file_id в контекст
+        context.user_data[f"art_{short_file_id}"] = file_id
         
-        # 👇 ТЕПЕРЬ ПРОБУЕМ ФОТО
         keyboard = [
-            [InlineKeyboardButton("✅ Common (100)", callback_data=f"suggest_common_{user_id}_{file_id}"),
-             InlineKeyboardButton("✅ Rare (500)", callback_data=f"suggest_rare_{user_id}_{file_id}")],
-            [InlineKeyboardButton("❌ Reject", callback_data=f"suggest_reject_{user_id}_{file_id}")]
+            [InlineKeyboardButton("✅ Common (100)", callback_data=f"sug_c_{user_id}_{short_file_id}"),
+             InlineKeyboardButton("✅ Rare (500)", callback_data=f"sug_r_{user_id}_{short_file_id}")],
+            [InlineKeyboardButton("❌ Reject", callback_data=f"sug_x_{user_id}_{short_file_id}")]
         ]
         
         await context.bot.send_photo(
@@ -774,15 +767,7 @@ async def handle_suggested_art(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data['awaiting_art'] = False
         
     except Exception as e:
-        print(f"❌ ERROR: {e}")
-        # 👇 ПОПРОБУЕМ ОТПРАВИТЬ ТЕБЕ ТЕКСТ ОШИБКИ
-        try:
-            await context.bot.send_message(
-                chat_id=YOUR_ID,
-                text=f"❌ Ошибка при отправке арта: {str(e)}"
-            )
-        except:
-            pass
+        print(f"❌ Error in handle_suggested_art: {e}")
         await update.message.reply_text("❌ Something went wrong. Try again!")
         context.user_data['awaiting_art'] = False
 
@@ -791,11 +776,17 @@ async def suggest_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     data = query.data.split("_")
-    rarity = data[1]  # common или rare
+    rarity = "common" if data[1] == "c" else "rare"
     user_id = int(data[2])
-    file_id = data[3]
+    short_file_id = data[3]
     
-    # Награда (100 за common, 500 за rare)
+    # Восстанавливаем полный file_id
+    file_id = context.user_data.get(f"art_{short_file_id}")
+    if not file_id:
+        await query.edit_message_caption(caption="❌ Art not found!")
+        return
+    
+    # Награда
     reward = 100 if rarity == "common" else 500
     
     conn = get_db()
@@ -3095,7 +3086,7 @@ def run_bot():
     app.job_queue.run_once(load_arts, 0)
     
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("suggest", suggest))  # ← ВМЕСТО report
+    app.add_handler(CommandHandler("suggest", suggest))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("stats", my_stats))
     
@@ -3157,12 +3148,12 @@ def run_bot():
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     
-    # ========== ОБРАБОТЧИКИ ДЛЯ ПРЕДЛОЖЕНИЙ ==========
+    # ========== ОБРАБОТЧИКИ ДЛЯ ПРЕДЛОЖЕНИЙ (ИСПРАВЛЕНО!) ==========
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_suggested_art))
-    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="suggest_common_"))
-    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="suggest_rare_"))
-    app.add_handler(CallbackQueryHandler(suggest_reject, pattern="suggest_reject_"))
-    # ============================================
+    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_c_"))
+    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_r_"))
+    app.add_handler(CallbackQueryHandler(suggest_reject, pattern="sug_x_"))
+    # ========================================================
    
     app.run_polling()
 
