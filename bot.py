@@ -1194,26 +1194,31 @@ async def check_game_over(room_id, context):
     return False
 
 async def next_round(room_id, context):
-    """Начисляет доходы, расходы и события за раунд"""
+    """Начисляет доходы, расходы и возвращает список событий"""
     if room_id not in active_rooms:
-        return
+        return []
     
     players = active_rooms[room_id].get("players", [])
     current_round = active_rooms[room_id].get("round", 1)
     chat_id = active_rooms[room_id]["chat_id"]
+    lang = active_rooms[room_id].get("lang", "en")
+    
+    events_list = []  # список событий для вывода
     
     # 👇 ПРОВЕРКА НА 100 РАУНД (ГАРАНТИРОВАННАЯ СЕНКО)
     if current_round >= 100:
+        if lang == "en":
+            events_list.append("🦊 <b>SENKO'S VISIT!</b> Game over. Everyone wins! 🏆")
+        else:
+            events_list.append("🦊 <b>СЕНКО В ГОСТЯХ!</b> Игра завершена. Все молодцы! 🏆")
+        
         await context.bot.send_message(
             chat_id=chat_id,
-            text="🦊 <b>СЕНКО В ГОСТЯХ!</b>\n\n"
-                 "На 100 раунде к вам пришла Сенко в костюме Нико и сказала:\n"
-                 "✨ <i>«Вы так долго играли... Пора отдохнуть!»</i>\n\n"
-                 "Игра завершена. Все молодцы! 🏆",
+            text="\n".join(events_list),
             parse_mode="HTML"
         )
         del active_rooms[room_id]
-        return
+        return []
     
     for player in players:
         # 1. ДОХОД ОТ ЗДАНИЙ
@@ -1233,13 +1238,12 @@ async def next_round(room_id, context):
             growth = int(player.population * player.population_growth / 100)
             player.population += max(1, growth)
         
-        # 4. 👇 СОБЫТИЯ ДЛЯ КАЖДОГО ИГРОКА (75% шанс)
-        if random.randint(1, 100) <= 75:  # 75% шанс
+        # 4. СОБЫТИЯ ДЛЯ КАЖДОГО ИГРОКА (75% шанс)
+        if random.randint(1, 100) <= 75:
             # Выбираем событие по шансам
             events_pool = []
             for event in EVENTS:
-                # 0.1% -> 1, 1% -> 10, 5% -> 50, 10% -> 100
-                weight = int(event["chance"] * 10)
+                weight = int(event["chance"] * 10)  # 0.1% -> 1, 1% -> 10, 10% -> 100
                 events_pool.extend([event] * weight)
             
             chosen_event = random.choice(events_pool)
@@ -1247,18 +1251,18 @@ async def next_round(room_id, context):
             # Применяем эффект к игроку
             chosen_event["effect"](player)
             
-            # Отправляем сообщение в чат
-            lang = active_rooms[room_id].get("lang", "en")
-            if lang == "en":
-                event_text = f"🎲 <b>Event for @{player.user_id}:</b>\n{chosen_event['desc_en']}"
-            else:
-                event_text = f"🎲 <b>Событие для @{player.user_id}:</b>\n{chosen_event['desc_ru']}"
+            # Получаем нормальное имя игрока
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
+                player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
+            except:
+                player_name = str(player.user_id)
             
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=event_text,
-                parse_mode="HTML"
-            )
+            # Добавляем в список событий
+            if lang == "en":
+                events_list.append(f"👤 {player_name}: {chosen_event['desc_en']}")
+            else:
+                events_list.append(f"👤 {player_name}: {chosen_event['desc_ru']}")
         
         # 5. РАСХОДЫ (ЕДА)
         food_consumed = player.calculate_food_consumption()
@@ -1286,6 +1290,7 @@ async def next_round(room_id, context):
         player.population = min(player.population, 10000)
     
     await check_game_over(room_id, context)
+    return events_list  # возвращаем список событий
 
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1388,17 +1393,41 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_turn = active_rooms[room_id].get("turn", 1)
     current_round = active_rooms[room_id].get("round", 1)
     
-    # 👇 ЕСЛИ ЭТО БЫЛ ЧЁТНЫЙ ХОД (2,4,6...) — ЗАКАНЧИВАЕМ РАУНД
+    # Чётный ход — заканчиваем раунд
     if current_turn % 2 == 0:
         current_round += 1
         active_rooms[room_id]["round"] = current_round
-        # 👇 НАЧИСЛЯЕМ РЕСУРСЫ ТОЛЬКО В КОНЦЕ РАУНДА!
-        await next_round(room_id, context)
     
     # Увеличиваем номер хода
     active_rooms[room_id]["turn"] = current_turn + 1
     active_rooms[room_id]["allowed"] = [other_player.user_id]
     active_rooms[room_id]["current_player"] = other_player.user_id
+    
+    # 👇 ВЫЗЫВАЕМ next_round И ПОЛУЧАЕМ СПИСОК СОБЫТИЙ
+    events = await next_round(room_id, context)
+    
+    if await check_game_over(room_id, context):
+        return
+    
+    # 👇 ЕСЛИ БЫЛИ СОБЫТИЯ — ПОКАЗЫВАЕМ ИХ
+    if events:
+        if lang == "en":
+            event_title = "🎲 <b>EVENTS THIS ROUND!</b>"
+            back_text = "🔙 Back to Game"
+        else:
+            event_title = "🎲 <b>СОБЫТИЯ РАУНДА!</b>"
+            back_text = "🔙 В игру"
+        
+        events_text = event_title + "\n\n" + "\n".join(events)
+        
+        back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{other_player.user_id}")]]
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=events_text,
+            reply_markup=InlineKeyboardMarkup(back_keyboard),
+            parse_mode="HTML"
+        )
     
     # Тексты с номером раунда
     if lang == "en":
