@@ -1134,7 +1134,7 @@ async def check_game_over(room_id, context):
             continue  # Мёртв
         if player.food <= 0 and player.race_id != "demon":
             continue  # Умер с голоду (кроме демонов)
-        if player.depression >= 1000:
+        if player.depression >= 100:
             continue  # Психологическая смерть
         
         alive_players.append(player)
@@ -1208,13 +1208,13 @@ async def next_round(room_id, context):
     # 👇 ПРОВЕРКА НА 100 РАУНД (ГАРАНТИРОВАННАЯ СЕНКО)
     if current_round >= 100:
         if lang == "en":
-            events_list.append("🦊 <b>SENKO'S VISIT!</b> Game over. Everyone wins! 🏆")
+            senko_text = "🦊 <b>SENKO'S VISIT!</b>\n\nAt round 100, Senko in Niko's outfit came and said:\n✨ <i>\"You've played so long... Time to rest!\"</i>\n\nGame over. Everyone wins! 🏆"
         else:
-            events_list.append("🦊 <b>СЕНКО В ГОСТЯХ!</b> Игра завершена. Все молодцы! 🏆")
+            senko_text = "🦊 <b>СЕНКО В ГОСТЯХ!</b>\n\nНа 100 раунде к вам пришла Сенко в костюме Нико и сказала:\n✨ <i>«Вы так долго играли... Пора отдохнуть!»</i>\n\nИгра завершена. Все молодцы! 🏆"
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="\n".join(events_list),
+            text=senko_text,
             parse_mode="HTML"
         )
         del active_rooms[room_id]
@@ -1278,7 +1278,32 @@ async def next_round(room_id, context):
         player.depression += 1
         player.apply_depression()
         
-        # 7. ЛИМИТЫ
+        # 👇 7. БУНТ (если вера < 200, шанс 10%)
+        if player.faith < 200 and random.randint(1, 100) <= 10:
+            # Бунт!
+            losses = max(1, player.population // 3)  # 30% населения
+            player.population -= losses
+            player.depression += 5
+            
+            # Получаем имя игрока
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
+                player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
+            except:
+                player_name = str(player.user_id)
+            
+            if lang == "en":
+                revolt_text = f"🔥 <b>REVOLT!</b>\n{player_name} lost {losses} units, +5 depression!"
+            else:
+                revolt_text = f"🔥 <b>БУНТ!</b>\n{player_name} потерял {losses} юнитов, +5 депрессии!"
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=revolt_text,
+                parse_mode="HTML"
+            )
+        
+        # 8. ЛИМИТЫ
         player.food = min(player.food, player.food_limit)
         player.faith = min(player.faith, player.faith_limit)
         player.labor = min(player.labor, player.labor_limit)
@@ -1290,7 +1315,7 @@ async def next_round(room_id, context):
         player.population = min(player.population, 10000)
     
     await check_game_over(room_id, context)
-    return events_list  # возвращаем список событий
+    return events_list
 
 async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
