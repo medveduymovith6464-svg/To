@@ -118,78 +118,96 @@ def get_all_players():
         c = conn.cursor()
         c.execute("SELECT user_id FROM players")
         users = c.fetchall()
-        conn.close()
-        return users
-    except Exception as e:
-        print(f"❌ Ошибка при получении списка игроков: {e}")
-        return []
 
-def update_player_stats(user_id, won=False):
-    """Обновляет статистику игрока после игры"""
+# =============================================================================
+# БЛОК 2: БАЗА ДАННЫХ (PostgreSQL на Neon)
+# =============================================================================
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import datetime
+
+def get_db():
+    """Возвращает подключение к Neon PostgreSQL"""
+    DATABASE_URL = os.environ.get("NEON_DB_URL")
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+def init_db():
+    """Создаёт таблицы, если их нет"""
     try:
         conn = get_db()
         c = conn.cursor()
-        c.execute(
-            "UPDATE players SET games_played = games_played + 1 WHERE user_id = %s",
-            (user_id,)
-        )
-        if won:
-            c.execute(
-                "UPDATE players SET wins = wins + 1 WHERE user_id = %s",
-                (user_id,)
-            )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"❌ Ошибка при обновлении статистики игрока {user_id}: {e}")
-
-def save_game(winner_race, winner_id, players_data, room_id):
-    """Сохраняет информацию о завершённой игре"""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (%s, %s, %s, %s, %s)",
-            (datetime.now(), winner_race, winner_id, json.dumps(players_data), room_id)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"❌ Ошибка при сохранении игры: {e}")
-
-# 👇 НОВЫЕ ФУНКЦИИ ДЛЯ АРТОВ
-def save_art(file_id, rarity):
-    """Сохраняет арт в базу данных"""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO arts (file_id, rarity, added_at) VALUES (%s, %s, %s) ON CONFLICT (file_id) DO NOTHING",
-            (file_id, rarity, datetime.now())
-        )
-        conn.commit()
-        conn.close()
-        print(f"✅ Арт сохранён в БД: {rarity} - {file_id[:20]}...")
-    except Exception as e:
-        print(f"❌ Ошибка при сохранении арта: {e}")
-
-def load_arts_from_db():
-    """Загружает все арты из базы данных при старте"""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT file_id, rarity FROM arts")
-        rows = c.fetchall()
-        conn.close()
         
-        SENKO_ARTS["common"] = []
-        SENKO_ARTS["rare"] = []
-        for row in rows:
-            SENKO_ARTS[row['rarity']].append(row['file_id'])
+        # Таблица игроков
+        c.execute("""CREATE TABLE IF NOT EXISTS players (
+            user_id BIGINT PRIMARY KEY, 
+            username TEXT, 
+            games_played INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0, 
+            registered_at TIMESTAMP
+        )""")
         
-        print(f"✅ Арты загружены из БД: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+        # Таблица игр
+        c.execute("""CREATE TABLE IF NOT EXISTS games (
+            id SERIAL PRIMARY KEY, 
+            date TIMESTAMP, 
+            winner_race TEXT,
+            winner_id BIGINT, 
+            players TEXT, 
+            room_id TEXT
+        )""")
+        
+        # Таблица для Сенко-коинов
+        c.execute("""CREATE TABLE IF NOT EXISTS neko_coins (
+            user_id BIGINT PRIMARY KEY,
+            coins INTEGER DEFAULT 0,
+            last_bonus DATE
+        )""")
+        
+        # Таблица для еженедельной статистики
+        c.execute("""CREATE TABLE IF NOT EXISTS weekly_stats (
+            id SERIAL PRIMARY KEY,
+            week_start DATE,
+            race TEXT,
+            wins INTEGER DEFAULT 0
+        )""")
+        
+        # 👇 ТАБЛИЦА ДЛЯ ДАТЫ СБРОСА
+        c.execute("""CREATE TABLE IF NOT EXISTS reset_log (
+            id SERIAL PRIMARY KEY,
+            last_reset DATE
+        )""")
+        
+        # 👇 ТАБЛИЦА ДЛЯ АРТОВ
+        c.execute("""CREATE TABLE IF NOT EXISTS arts (
+            id SERIAL PRIMARY KEY,
+            file_id TEXT UNIQUE,
+            rarity TEXT,
+            added_at TIMESTAMP
+        )""")
+        
+        # 👇 ТАБЛИЦА ДЛЯ КОЛЛЕКЦИЙ
+        c.execute("""CREATE TABLE IF NOT EXISTS art_collections (
+            user_id BIGINT,
+            art_id TEXT,
+            rarity TEXT,
+            opened_at TIMESTAMP,
+            UNIQUE(user_id, art_id)
+        )""")
+        
+        # 👇 ТАБЛИЦА ДЛЯ ЛИДЕРБОРДА
+        c.execute("""CREATE TABLE IF NOT EXISTS art_leaderboard (
+            user_id BIGINT PRIMARY KEY,
+            unique_arts INTEGER DEFAULT 0,
+            last_updated TIMESTAMP
+        )""")
+        
+        conn.commit()
+        conn.close()
+        print("✅ База данных Neon инициализирована")
     except Exception as e:
-        print(f"❌ Ошибка при загрузке артов из БД: {e}")
+        print(f"❌ Ошибка при инициализации БД: {e}")
+
+# ... все остальные функции (add_player, get_all_players, update_player_stats, save_game, save_art, load_arts_from_db) ...
 
 async def check_weekly_reset():
     """Проверяет, не пора ли сбросить статистику"""
@@ -215,7 +233,7 @@ async def check_weekly_reset():
             GROUP BY winner_race
         """, (today - datetime.timedelta(days=7), last_reset['last_reset'] if last_reset else today))
         
-        # Очищаем таблицу games (если хочешь удалять старые игры)
+        # Очищаем таблицу games (удаляем старые игры)
         c.execute("DELETE FROM games")
         
         # Записываем дату сброса
@@ -765,7 +783,7 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
     
-    # Считаем игры ЗА ПОСЛЕДНИЕ 7 ДНЕЙ
+    # Считаем игры ЗА ВСЁ ВРЕМЯ (или за последние 7 дней)
     week_ago = datetime.now().date() - datetime.timedelta(days=7)
     c.execute("SELECT COUNT(*) FROM games WHERE date >= %s", (week_ago,))
     total_games = c.fetchone()[0]
