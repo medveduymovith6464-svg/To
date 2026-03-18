@@ -2982,9 +2982,8 @@ async def get_bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = c.fetchone()
     
     if result and result['last_bonus'] == today:
-        # Уже получал
         await query.edit_message_text(
-            "❌ You already got bonus! Wait 23 hours.",
+            "❌ Already got bonus today! Wait 24h.",
             parse_mode="HTML"
         )
         conn.close()
@@ -3006,7 +3005,7 @@ async def get_bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     conn.close()
     
-    # Кнопки для возврата
+    # Кнопки
     keyboard = [[
         InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
         InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")
