@@ -3199,24 +3199,24 @@ async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def reload_arts_from_channels(bot):
-    """Загружает все file_id из каналов при старте бота"""
+    """Загружает ВСЕ file_id из каналов при старте бота"""
     print("🔄 Начинаю загрузку артов из каналов...")
     
     SENKO_ARTS["common"] = []
     SENKO_ARTS["rare"] = []
     
     try:
-        # Читаем обычный канал
+        # Читаем обычный канал (ВСЕ ПОСТЫ)
         print("📥 Читаю @Senkocommon...")
-        async for message in bot.get_chat_history("@Senkocommon", limit=100):
+        async for message in bot.get_chat_history("@Senkocommon"):
             if message.photo:
                 file_id = message.photo[-1].file_id
                 SENKO_ARTS["common"].append(file_id)
                 print(f"  ✅ Common art: {file_id[:20]}...")
         
-        # Читаем редкий канал
+        # Читаем редкий канал (ВСЕ ПОСТЫ)
         print("📥 Читаю @SenkoRare...")
-        async for message in bot.get_chat_history("@SenkoRare", limit=100):
+        async for message in bot.get_chat_history("@SenkoRare"):
             if message.photo:
                 file_id = message.photo[-1].file_id
                 SENKO_ARTS["rare"].append(file_id)
