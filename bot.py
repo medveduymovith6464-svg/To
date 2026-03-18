@@ -3862,96 +3862,83 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # 👇 ЗАГРУЖАЕМ АРТЫ ИЗ БАЗЫ ПРИ СТАРТЕ
+    # Загрузка артов и проверка сброса
     load_arts_from_db()
     
-    # 👇 ПРОВЕРЯЕМ СБРОС СТАТИСТИКИ
     async def check_reset(context):
         await check_weekly_reset()
     app.job_queue.run_once(check_reset, 0)
     
+    # ===== 1. КОМАНДЫ =====
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("suggest", suggest))
     app.add_handler(CommandHandler("balance", balance))
     app.add_handler(CommandHandler("howtoplay", help_command))
+    app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("bonus", bonus))
     
-    # Сначала самые длинные/точные паттерны
+    # ===== 2. ОСНОВНАЯ ИГРА (точные паттерны) =====
     app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
     app.add_handler(CallbackQueryHandler(construct, pattern="construct_"))
     app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
-    
-    # Потом основные игровые действия
     app.add_handler(CallbackQueryHandler(build_menu, pattern="build_"))
     app.add_handler(CallbackQueryHandler(war, pattern="war_"))
     app.add_handler(CallbackQueryHandler(end_turn, pattern="endturn_"))
-    
-    # Потом выбор расы и язык
     app.add_handler(CallbackQueryHandler(confirm_endturn, pattern="confirm_endturn_"))
     app.add_handler(CallbackQueryHandler(cancel_endturn, pattern="cancel_endturn_"))
     app.add_handler(CallbackQueryHandler(delete_steal, pattern="delete_steal_"))
+    app.add_handler(CallbackQueryHandler(delete_events, pattern="delete_events_"))
+    app.add_handler(CallbackQueryHandler(attack, pattern="attack_"))
+    app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
+    app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
+    app.add_handler(CallbackQueryHandler(income, pattern="income_"))
+    
+    # ===== 3. КОМНАТЫ И РАСЫ =====
     app.add_handler(CallbackQueryHandler(choose_race, pattern="race_"))
+    app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
+    app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
+    app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
+    app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
+    app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
+    
+    # ===== 4. ЯЗЫК =====
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
     
-    # Потом системные (новая игра)
-    app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
-    
-    # Самые общие — в конце
-    app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
-    app.add_handler(CallbackQueryHandler(upgrade_menu, pattern="upgrade_menu_"))
-    app.add_handler(CallbackQueryHandler(delete_events, pattern="delete_events_"))
-    app.add_handler(CallbackQueryHandler(attack, pattern="attack_"))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CallbackQueryHandler(do_upgrade, pattern="upgrade_"))
-    app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
-    app.add_handler(CallbackQueryHandler(income, pattern="income_"))
-    app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
-    app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
-    
-    # ========== ОБРАБОТЧИКИ ДЛЯ АРТОВ ==========
-    # Слушатель каналов
+    # ===== 5. АРТЫ И МАГАЗИН =====
+    # Каналы
     app.add_handler(MessageHandler(
         filters.Chat(username="@Senkocommon") | filters.Chat(username="@SenkoRare"), 
         channel_post
     ))
     
-    # Команда /bonus
-    # Продажа артов
-    app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="sell_menu"))
-    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="sell_"))
-    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="sell_common_"))
-    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="sell_rare_"))
-    app.add_handler(CallbackQueryHandler(sell_art_execute, pattern="sell_confirm_"))
-
-# Лидерборд
-    app.add_handler(CallbackQueryHandler(art_leaderboard, pattern="art_leaderboard"))
-    app.add_handler(CommandHandler("bonus", bonus))
+    # Главные кнопки магазина (САМЫЕ ВАЖНЫЕ - СТАВИМ ПЕРВЫМИ!)
+    app.add_handler(CallbackQueryHandler(get_bonus, pattern="^get_bonus$"))
+    app.add_handler(CallbackQueryHandler(buy_art_menu, pattern="^buy_art_menu$"))
+    app.add_handler(CallbackQueryHandler(bonus_back, pattern="^bonus_back$"))
     
-    # Кнопки для артов
-    app.add_handler(CallbackQueryHandler(get_bonus, pattern="get_bonus"))
-    app.add_handler(CallbackQueryHandler(buy_art_menu, pattern="buy_art_menu"))
-    app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="buy_art_10"))
-    app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="buy_art_50"))
-    app.add_handler(CallbackQueryHandler(bonus_back, pattern="bonus_back"))
+    # Покупка за монеты
+    app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="^buy_art_10$"))
+    app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="^buy_art_50$"))
     
-    # Обработчики для звёзд
-    app.add_handler(CallbackQueryHandler(buy_star, pattern="buy_star_1"))
-    app.add_handler(CallbackQueryHandler(buy_star, pattern="buy_star_5"))
+    # Покупка за звёзды
+    app.add_handler(CallbackQueryHandler(buy_star, pattern="^buy_star_1$"))
+    app.add_handler(CallbackQueryHandler(buy_star, pattern="^buy_star_5$"))
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     
-    # ========== ОБРАБОТЧИКИ ДЛЯ ПРЕДЛОЖЕНИЙ ==========
+    # Продажа артов
+    app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="^sell_menu$"))
+    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="^sell_"))
+    app.add_handler(CallbackQueryHandler(sell_art_execute, pattern="^sell_confirm_"))
+    
+    # Лидерборд
+    app.add_handler(CallbackQueryHandler(art_leaderboard, pattern="^art_leaderboard$"))
+    
+    # ===== 6. ПРЕДЛОЖЕНИЯ АРТОВ =====
     app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_suggested_art))
-    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_c_"))
-    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="sug_r_"))
-    app.add_handler(CallbackQueryHandler(suggest_reject, pattern="sug_x_"))
-    # ============================================
-   
+    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="^sug_c_"))
+    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="^sug_r_"))
+    app.add_handler(CallbackQueryHandler(suggest_reject, pattern="^sug_x_"))
+    
     app.run_polling()
-
-if __name__ == "__main__":
-    import threading
-    flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
-    flask_thread.daemon = True
-    flask_thread.start()
-    run_bot()
