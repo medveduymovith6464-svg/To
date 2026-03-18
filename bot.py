@@ -3198,25 +3198,32 @@ async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
-async def reload_arts_from_channels(context):
+async def reload_arts_from_channels(bot):
     """Загружает все file_id из каналов при старте бота"""
+    print("🔄 Начинаю загрузку артов из каналов...")
+    
     SENKO_ARTS["common"] = []
     SENKO_ARTS["rare"] = []
     
     try:
         # Читаем обычный канал
-        async for message in context.bot.get_chat_history("@Senkocommon", limit=100):
+        print("📥 Читаю @Senkocommon...")
+        async for message in bot.get_chat_history("@Senkocommon", limit=100):
             if message.photo:
                 file_id = message.photo[-1].file_id
                 SENKO_ARTS["common"].append(file_id)
+                print(f"  ✅ Common art: {file_id[:20]}...")
         
         # Читаем редкий канал
-        async for message in context.bot.get_chat_history("@SenkoRare", limit=100):
+        print("📥 Читаю @SenkoRare...")
+        async for message in bot.get_chat_history("@SenkoRare", limit=100):
             if message.photo:
                 file_id = message.photo[-1].file_id
                 SENKO_ARTS["rare"].append(file_id)
+                print(f"  ✅ Rare art: {file_id[:20]}...")
         
         print(f"✅ Арты загружены: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+        
     except Exception as e:
         print(f"❌ Ошибка загрузки артов: {e}")
     
