@@ -2973,67 +2973,47 @@ async def get_bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = query.from_user.id
     today = datetime.now().date()
-    lang = user_languages.get(user_id, "en")
     
     conn = get_db()
     c = conn.cursor()
     
-    # Проверяем, получал ли сегодня бонус
+    # Проверяем, получал ли сегодня
     c.execute("SELECT last_bonus FROM neko_coins WHERE user_id = %s", (user_id,))
     result = c.fetchone()
     
     if result and result['last_bonus'] == today:
-        if lang == "en":
-            text = "❌ You already claimed your daily bonus!\nCome back tomorrow."
-        else:
-            text = "❌ Ты уже получил бонус сегодня!\nПриходи завтра."
-        
-        await query.edit_message_text(text, parse_mode="HTML")
+        # Уже получал
+        await query.edit_message_text(
+            "❌ You already got bonus! Wait 23 hours.",
+            parse_mode="HTML"
+        )
         conn.close()
         return
     
-    # Даём бонус 10 монет
+    # Даём бонус
     if result:
-        c.execute("""
-            UPDATE neko_coins 
-            SET coins = coins + 10, last_bonus = %s 
-            WHERE user_id = %s
-        """, (today, user_id))
+        c.execute("UPDATE neko_coins SET coins = coins + 10, last_bonus = %s WHERE user_id = %s",
+                  (today, user_id))
     else:
-        c.execute("""
-            INSERT INTO neko_coins (user_id, coins, last_bonus) 
-            VALUES (%s, 10, %s)
-        """, (user_id, today))
+        c.execute("INSERT INTO neko_coins (user_id, coins, last_bonus) VALUES (%s, 10, %s)",
+                  (user_id, today))
     
-    # Получаем новый баланс
+    conn.commit()
+    
+    # Новый баланс
     c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
     new_balance = c.fetchone()['coins']
     
-    conn.commit()
     conn.close()
     
-    # Возвращаемся в меню
-    keyboard = [
-        [InlineKeyboardButton(
-            "🎁 Get Bonus" if lang == "en" else "🎁 Получить бонус", 
-            callback_data="get_bonus"
-        ), InlineKeyboardButton(
-            "🖼 Buy Art" if lang == "en" else "🖼 Купить арт", 
-            callback_data="buy_art_menu"
-        )]
-    ]
-    
-    if lang == "en":
-        text = f"✅ <b>+10 Senko Coins!</b>\n\n"
-        text += f"New balance: {new_balance}🪙\n\n"
-        text += f"Choose option:"
-    else:
-        text = f"✅ <b>+10 Сенко-коинов!</b>\n\n"
-        text += f"Новый баланс: {new_balance}🪙\n\n"
-        text += f"Выбери действие:"
+    # Кнопки для возврата
+    keyboard = [[
+        InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
+        InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")
+    ]]
     
     await query.edit_message_text(
-        text,
+        f"✅ <b>+10 Senko Coins!</b>\n\nNew balance: {new_balance}🪙",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
