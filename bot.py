@@ -3857,14 +3857,15 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text)
 
 # =============================================================================
-# БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
+# БЛОК 10: ЗАПУСК (бот + фласк в разных потоках) - ИСПРАВЛЕНО!
 # =============================================================================
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # Загрузка артов и проверка сброса
+    # 👇 ЗАГРУЖАЕМ АРТЫ ИЗ БАЗЫ ПРИ СТАРТЕ
     load_arts_from_db()
     
+    # 👇 ПРОВЕРЯЕМ СБРОС СТАТИСТИКИ
     async def check_reset(context):
         await check_weekly_reset()
     app.job_queue.run_once(check_reset, 0)
@@ -3877,7 +3878,7 @@ def run_bot():
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("bonus", bonus))
     
-    # ===== 2. ОСНОВНАЯ ИГРА (точные паттерны) =====
+    # ===== 2. ОСНОВНАЯ ИГРА =====
     app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
     app.add_handler(CallbackQueryHandler(construct, pattern="construct_"))
     app.add_handler(CallbackQueryHandler(my_city, pattern="mycity_"))
@@ -3906,33 +3907,23 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
     
     # ===== 5. АРТЫ И МАГАЗИН =====
-    # Каналы
     app.add_handler(MessageHandler(
         filters.Chat(username="@Senkocommon") | filters.Chat(username="@SenkoRare"), 
         channel_post
     ))
     
-    # Главные кнопки магазина (САМЫЕ ВАЖНЫЕ - СТАВИМ ПЕРВЫМИ!)
     app.add_handler(CallbackQueryHandler(get_bonus, pattern="^get_bonus$"))
     app.add_handler(CallbackQueryHandler(buy_art_menu, pattern="^buy_art_menu$"))
     app.add_handler(CallbackQueryHandler(bonus_back, pattern="^bonus_back$"))
-    
-    # Покупка за монеты
     app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="^buy_art_10$"))
     app.add_handler(CallbackQueryHandler(buy_art_coins, pattern="^buy_art_50$"))
-    
-    # Покупка за звёзды
     app.add_handler(CallbackQueryHandler(buy_star, pattern="^buy_star_1$"))
     app.add_handler(CallbackQueryHandler(buy_star, pattern="^buy_star_5$"))
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
-    
-    # Продажа артов
     app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="^sell_menu$"))
     app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="^sell_"))
     app.add_handler(CallbackQueryHandler(sell_art_execute, pattern="^sell_confirm_"))
-    
-    # Лидерборд
     app.add_handler(CallbackQueryHandler(art_leaderboard, pattern="^art_leaderboard$"))
     
     # ===== 6. ПРЕДЛОЖЕНИЯ АРТОВ =====
@@ -3941,4 +3932,27 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(suggest_approve, pattern="^sug_r_"))
     app.add_handler(CallbackQueryHandler(suggest_reject, pattern="^sug_x_"))
     
+    # 👇 ЗАПУСКАЕМ БОТА (он БЛОКИРУЕТ выполнение)
     app.run_polling()
+
+# ===== ЭТОТ БЛОК ТЕПЕРЬ ВНЕ ФУНКЦИИ run_bot() =====
+if __name__ == "__main__":
+    import threading
+    
+    # Запускаем Flask в отдельном потоке
+    flask_app = Flask(__name__)
+    
+    @flask_app.route('/')
+    def index(): return '🤖 Bot is running!'
+    
+    @flask_app.route('/health')
+    def health(): return 'OK'
+    
+    flask_thread = threading.Thread(
+        target=lambda: flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    )
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    # 👇 ЗАПУСКАЕМ БОТА ТОЛЬКО ОДИН РАЗ!
+    run_bot()
