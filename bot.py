@@ -3027,18 +3027,39 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     balance = result['coins'] if result else 0
     conn.close()
     
+    lang = user_languages.get(user_id, "en")
+    
+    if lang == "en":
+        text = f"🖼 <b>Art Shop</b>\n\n"
+        text += f"Your balance: {balance}🪙\n\n"
+        text += f"Choose option:"
+        
+        buy_common = "🟦 Common (10🪙)"
+        buy_rare = "🟪 Rare (50🪙)"
+        sell_text = "💰 Sell Arts"
+        leaderboard_text = "🏆 Leaderboard"
+        back_text = "🔙 Back"
+    else:
+        text = f"🖼 <b>Магазин Артов</b>\n\n"
+        text += f"Твой баланс: {balance}🪙\n\n"
+        text += f"Выбери действие:"
+        
+        buy_common = "🟦 Обычный (10🪙)"
+        buy_rare = "🟪 Редкий (50🪙)"
+        sell_text = "💰 Продать Арты"
+        leaderboard_text = "🏆 Лидерборд"
+        back_text = "🔙 Назад"
+    
     keyboard = [
-        [InlineKeyboardButton("10 SenkoCoins", callback_data="buy_art_10"),
-         InlineKeyboardButton("50 SenkoCoins", callback_data="buy_art_50")],
-        [InlineKeyboardButton("1 Telegram Star", callback_data="buy_star_1"),
-         InlineKeyboardButton("5 Telegram Stars", callback_data="buy_star_5")],
-        [InlineKeyboardButton("🔙 Back", callback_data="bonus_back")]
+        [InlineKeyboardButton(buy_common, callback_data="buy_art_10"),
+         InlineKeyboardButton(buy_rare, callback_data="buy_art_50")],
+        [InlineKeyboardButton(sell_text, callback_data="sell_menu"),
+         InlineKeyboardButton(leaderboard_text, callback_data="art_leaderboard")],
+        [InlineKeyboardButton(back_text, callback_data="bonus_back")]
     ]
     
     await query.edit_message_text(
-        f"🖼 <b>Buy Art</b>\n\n"
-        f"Your balance: {balance} SenkoCoins\n\n"
-        f"Choose payment method:",
+        text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
@@ -3074,6 +3095,15 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     file_id = random.choice(SENKO_ARTS[rarity])
     
+    # 👇 ЭТИ 2 СТРОЧКИ НАДО ДОБАВИТЬ (после выбора file_id, до отправки)
+    c.execute("""
+        INSERT INTO art_collections (user_id, art_id, rarity, opened_at) 
+        VALUES (%s, %s, %s, %s)
+    """, (user_id, file_id, rarity, datetime.now()))
+    
+    await update_art_leaderboard(user_id, conn)  # эта функция будет ниже
+    
+    # Списание монет
     c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
     conn.commit()
     conn.close()
@@ -3370,6 +3400,415 @@ async def reload_arts_from_channels(bot):
         traceback.print_exc()
     
     print("🔴🔴🔴 КОНЕЦ ЗАГРУЗКИ 🔴🔴🔴")
+
+# =============================================================================
+# БЛОК: ПРОДАЖА АРТОВ И ЛИДЕРБОРД
+# =============================================================================
+
+async def update_art_leaderboard(user_id, conn=None):
+    """Обновляет запись в лидерборде для пользователя"""
+    should_close = False
+    if not conn:
+        conn = get_db()
+        should_close = True
+    
+    c = conn.cursor()
+    
+    # Считаем количество уникальных артов у пользователя
+    c.execute("""
+        SELECT COUNT(DISTINCT art_id) as unique_count 
+        FROM art_collections 
+        WHERE user_id = %s
+    """, (user_id,))
+    
+    result = c.fetchone()
+    unique_count = result['unique_count'] if result else 0
+    
+    # Обновляем лидерборд
+    c.execute("""
+        INSERT INTO art_leaderboard (user_id, unique_arts, last_updated) 
+        VALUES (%s, %s, %s)
+        ON CONFLICT (user_id) 
+        DO UPDATE SET 
+            unique_arts = %s,
+            last_updated = %s
+    """, (user_id, unique_count, datetime.now(), unique_count, datetime.now()))
+    
+    conn.commit()
+    
+    if should_close:
+        conn.close()
+
+async def sell_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает меню продажи артов"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Получаем все уникальные арты пользователя
+    c.execute("""
+        SELECT art_id, rarity, COUNT(*) as count 
+        FROM art_collections 
+        WHERE user_id = %s 
+        GROUP BY art_id, rarity
+    """, (user_id,))
+    
+    user_arts = c.fetchall()
+    
+    if not user_arts:
+        if lang == "en":
+            text = "🖼️ <b>You don't have any arts yet!</b>\nBuy some first!"
+            back_text = "🔙 Back"
+        else:
+            text = "🖼️ <b>У тебя ещё нет артов!</b>\nСначала купи!"
+            back_text = "🔙 Назад"
+        
+        keyboard = [[InlineKeyboardButton(back_text, callback_data="bonus_back")]]
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        conn.close()
+        return
+    
+    if lang == "en":
+        text = f"💰 <b>Sell Your Arts</b>\n\n"
+        text += f"Common: 5🪙 each\n"
+        text += f"Rare: 25🪙 each\n\n"
+        text += f"Choose an art to sell:\n"
+        sell_text = "Sell"
+        back_text = "🔙 Back"
+    else:
+        text = f"💰 <b>Продажа Артов</b>\n\n"
+        text += f"Обычный: 5🪙 за штуку\n"
+        text += f"Редкий: 25🪙 за штуку\n\n"
+        text += f"Выбери арт для продажи:\n"
+        sell_text = "Продать"
+        back_text = "🔙 Назад"
+    
+    keyboard = []
+    for art in user_arts:
+        # Берём короткий ID для callback
+        short_id = art['art_id'][-20:] if len(art['art_id']) > 20 else art['art_id']
+        rarity_emoji = "🟦" if art['rarity'] == "common" else "🟪"
+        price = 5 if art['rarity'] == "common" else 25
+        
+        button_text = f"{rarity_emoji} {art['rarity'].capitalize()} x{art['count']} | {price}🪙"
+        keyboard.append([InlineKeyboardButton(
+            button_text,
+            callback_data=f"sell_{short_id}_{art['rarity']}_{user_id}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton(back_text, callback_data="bonus_back")])
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+    
+    conn.close()
+
+async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение продажи арта"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    short_id = data[1]
+    rarity = data[2]
+    user_id = int(data[3])
+    
+    if query.from_user.id != user_id:
+        return
+    
+    lang = user_languages.get(user_id, "en")
+    
+    # Находим полный file_id в базе
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
+    result = c.fetchone()
+    
+    if not result:
+        if lang == "en":
+            text = "❌ Art not found!"
+        else:
+            text = "❌ Арт не найден!"
+        
+        keyboard = [[InlineKeyboardButton(
+            "🔙 Back" if lang == "en" else "🔙 Назад",
+            callback_data="sell_menu"
+        )]]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        conn.close()
+        return
+    
+    file_id = result['file_id']
+    price = 5 if rarity == "common" else 25
+    
+    if lang == "en":
+        text = f"💰 <b>Sell {rarity.capitalize()} Art?</b>\n\n"
+        text += f"You will receive: {price}🪙\n\n"
+        text += f"This art will be removed from your collection."
+        confirm_text = "✅ Sell"
+        cancel_text = "❌ Cancel"
+    else:
+        text = f"💰 <b>Продать {rarity} арт?</b>\n\n"
+        text += f"Ты получишь: {price}🪙\n\n"
+        text += f"Этот арт исчезнет из твоей коллекции."
+        confirm_text = "✅ Продать"
+        cancel_text = "❌ Отмена"
+    
+    keyboard = [
+        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{file_id[-20:]}_{rarity}_{user_id}")],
+        [InlineKeyboardButton(cancel_text, callback_data="sell_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+    
+    conn.close()
+
+async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выполняет продажу арта"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    short_id = data[2]
+    rarity = data[3]
+    user_id = int(data[4])
+    
+    if query.from_user.id != user_id:
+        return
+    
+    lang = user_languages.get(user_id, "en")
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Находим полный file_id
+    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
+    result = c.fetchone()
+    
+    if not result:
+        if lang == "en":
+            text = "❌ Art not found!"
+        else:
+            text = "❌ Арт не найден!"
+        
+        keyboard = [[InlineKeyboardButton(
+            "🔙 Back" if lang == "en" else "🔙 Назад",
+            callback_data="sell_menu"
+        )]]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        conn.close()
+        return
+    
+    file_id = result['file_id']
+    price = 5 if rarity == "common" else 25
+    
+    # Удаляем ОДИН экземпляр арта из коллекции
+    c.execute("""
+        DELETE FROM art_collections 
+        WHERE user_id = %s AND art_id = %s 
+        LIMIT 1
+    """, (user_id, file_id))
+    
+    if c.rowcount == 0:
+        if lang == "en":
+            text = "❌ You don't own this art!"
+        else:
+            text = "❌ У тебя нет этого арта!"
+        
+        keyboard = [[InlineKeyboardButton(
+            "🔙 Back" if lang == "en" else "🔙 Назад",
+            callback_data="sell_menu"
+        )]]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        conn.close()
+        return
+    
+    # Добавляем монеты
+    c.execute("""
+        INSERT INTO neko_coins (user_id, coins, last_bonus) 
+        VALUES (%s, %s, %s)
+        ON CONFLICT (user_id) 
+        DO UPDATE SET coins = neko_coins.coins + %s
+    """, (user_id, price, datetime.now().date(), price))
+    
+    # Обновляем лидерборд
+    await update_art_leaderboard(user_id, conn)
+    
+    # Получаем новый баланс
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    new_balance = c.fetchone()['coins']
+    
+    conn.commit()
+    conn.close()
+    
+    if lang == "en":
+        text = f"✅ <b>Art sold!</b>\n\n"
+        text += f"+{price}🪙\n"
+        text += f"New balance: {new_balance}🪙"
+        menu_text = "📊 Leaderboard"
+        back_text = "🔙 Menu"
+    else:
+        text = f"✅ <b>Арт продан!</b>\n\n"
+        text += f"+{price}🪙\n"
+        text += f"Новый баланс: {new_balance}🪙"
+        menu_text = "📊 Лидерборд"
+        back_text = "🔙 Меню"
+    
+    keyboard = [
+        [InlineKeyboardButton(menu_text, callback_data="art_leaderboard")],
+        [InlineKeyboardButton(back_text, callback_data="bonus_back")]
+    ]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def art_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает топ игроков по количеству уникальных артов"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Получаем топ-10 игроков
+    c.execute("""
+        SELECT user_id, unique_arts 
+        FROM art_leaderboard 
+        ORDER BY unique_arts DESC 
+        LIMIT 10
+    """)
+    
+    leaders = c.fetchall()
+    
+    if not leaders:
+        if lang == "en":
+            text = "📊 <b>Art Leaderboard</b>\n\n"
+            text += "No collectors yet!\n"
+            text += "Buy arts to be the first! 🎨"
+            back_text = "🔙 Back"
+        else:
+            text = "📊 <b>Лидерборд Артов</b>\n\n"
+            text += "Пока нет коллекционеров!\n"
+            text += "Купи арты, чтобы стать первым! 🎨"
+            back_text = "🔙 Назад"
+        
+        keyboard = [[InlineKeyboardButton(back_text, callback_data="bonus_back")]]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        conn.close()
+        return
+    
+    # Получаем позицию текущего пользователя
+    c.execute("""
+        SELECT COUNT(*) + 1 as rank 
+        FROM art_leaderboard 
+        WHERE unique_arts > (
+            SELECT unique_arts FROM art_leaderboard WHERE user_id = %s
+        )
+    """, (user_id,))
+    
+    rank_result = c.fetchone()
+    user_rank = rank_result['rank'] if rank_result else "???"
+    
+    # Получаем количество артов у текущего пользователя
+    c.execute("SELECT unique_arts FROM art_leaderboard WHERE user_id = %s", (user_id,))
+    user_result = c.fetchone()
+    user_arts = user_result['unique_arts'] if user_result else 0
+    
+    if lang == "en":
+        text = "📊 <b>🏆 ART LEADERBOARD 🏆</b>\n\n"
+        text += "Top collectors:\n\n"
+        
+        medal_emojis = ["🥇", "🥈", "🥉"]
+        for i, leader in enumerate(leaders):
+            medal = medal_emojis[i] if i < 3 else f"{i+1}."
+            
+            # Получаем username
+            try:
+                chat_member = await context.bot.get_chat_member(query.message.chat.id, leader['user_id'])
+                username = chat_member.user.username or chat_member.user.first_name or f"User{leader['user_id']}"
+            except:
+                username = f"User{leader['user_id']}"
+            
+            text += f"{medal} {username}: {leader['unique_arts']} arts\n"
+        
+        text += f"\n🔹 Your rank: #{user_rank} with {user_arts} arts"
+        back_text = "🔙 Back"
+        refresh_text = "🔄 Refresh"
+    else:
+        text = "📊 <b>🏆 ЛИДЕРБОРД АРТОВ 🏆</b>\n\n"
+        text += "Лучшие коллекционеры:\n\n"
+        
+        medal_emojis = ["🥇", "🥈", "🥉"]
+        for i, leader in enumerate(leaders):
+            medal = medal_emojis[i] if i < 3 else f"{i+1}."
+            
+            try:
+                chat_member = await context.bot.get_chat_member(query.message.chat.id, leader['user_id'])
+                username = chat_member.user.username or chat_member.user.first_name or f"User{leader['user_id']}"
+            except:
+                username = f"User{leader['user_id']}"
+            
+            text += f"{medal} {username}: {leader['unique_arts']} артов\n"
+        
+        text += f"\n🔹 Твой ранг: #{user_rank} с {user_arts} артами"
+        back_text = "🔙 Назад"
+        refresh_text = "🔄 Обновить"
+    
+    keyboard = [
+        [InlineKeyboardButton(refresh_text, callback_data="art_leaderboard")],
+        [InlineKeyboardButton(back_text, callback_data="bonus_back")]
+    ]
+    
+    conn.close()
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
@@ -3467,6 +3906,15 @@ def run_bot():
     ))
     
     # Команда /bonus
+    # Продажа артов
+    app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="sell_menu"))
+    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="sell_"))
+    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="sell_common_"))
+    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="sell_rare_"))
+    app.add_handler(CallbackQueryHandler(sell_art_execute, pattern="sell_confirm_"))
+
+# Лидерборд
+    app.add_handler(CallbackQueryHandler(art_leaderboard, pattern="art_leaderboard"))
     app.add_handler(CommandHandler("bonus", bonus))
     
     # Кнопки для артов
