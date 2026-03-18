@@ -3259,19 +3259,22 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================================================================
 # БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
 # =============================================================================
+# БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
+# =============================================================================
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # Загружаем арты и проверяем сброс статистики при старте
-    async def load_arts_and_reset(context):
+    # Загружаем арты из каналов при старте
+    async def load_arts_on_startup(context):
         await reload_arts_from_channels(app.bot)
+        print(f"✅ Arts loaded: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
         await check_weekly_reset()
-    app.job_queue.run_once(load_arts_and_reset, 0)
+    app.job_queue.run_once(load_arts_on_startup, 0)
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("suggest", suggest))
     app.add_handler(CommandHandler("balance", balance))
-    app.add_handler(CommandHandler("stats", my_stats))
+    app.add_handler(CommandHandler("howtoplay", help_command))
     
     # Сначала самые длинные/точные паттерны
     app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
@@ -3291,10 +3294,8 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
     app.add_handler(CallbackQueryHandler(set_language, pattern="setlang_"))
     
-    # Потом системные (новая игра, статистика)
+    # Потом системные (новая игра)
     app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
-    app.add_handler(CallbackQueryHandler(my_stats, pattern="my_stats"))
-    app.add_handler(CallbackQueryHandler(balance, pattern="balance"))
     
     # Самые общие — в конце
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
