@@ -29,7 +29,8 @@ GAME_NAME = "Tribes: Last Standing"
 # =============================================================================
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime, timedelta, date  # ✅
+import datetime
+
 def get_db():
     """Возвращает подключение к Neon PostgreSQL"""
     DATABASE_URL = os.environ.get("NEON_DB_URL")
@@ -778,7 +779,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================================================================
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает баланс рас за последние 7 дней"""
-    from datetime import datetime, timedelta, date
+    from datetime import datetime, timedelta
     
     conn = get_db()
     c = conn.cursor()
@@ -979,7 +980,7 @@ async def suggest_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del context.bot_data['suggested_arts'][short_file_id]
     
     await query.edit_message_caption(caption="❌ Rejected")
-    
+
 # =============================================================================
 # БЛОК 8.5: РАССЫЛКА (только для тебя)
 # =============================================================================
@@ -2850,6 +2851,65 @@ async def get_bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
     before = c.fetchone()
     before_coins = before['coins'] if before else 0
+    
+    # Даём 10 монет (без проверки даты!)
+    if before:
+        c.execute("UPDATE neko_coins SET coins = coins + 10 WHERE user_id = %s", (user_id,))
+    else:
+        c.execute("INSERT INTO neko_coins (user_id, coins, last_bonus) VALUES (%s, 10, %s)",
+                  (user_id, today))
+    
+    conn.commit()
+    
+    # Проверяем баланс после
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    after = c.fetchone()
+    after_coins = after['coins'] if after else 0
+    
+    conn.close()
+    
+    # Показываем результат
+    await query.edit_message_text(
+        f"💰 Было: {before_coins}🪙\n"
+        f"➕ +10🪙\n"
+        f"💎 Стало: {after_coins}🪙\n\n"
+        f"✅ Get Bonus РАБОТАЕТ!",
+        parse_mode="HTML"
+    )
+# Buy art menu
+async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    conn = sqlite3.connect("game.db")
+    c = conn.cursor()
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = ?", (user_id,))
+    result = c.fetchone()
+    balance = result[0] if result else 0
+    conn.close()
+    
+    keyboard = [
+        [InlineKeyboardButton("10 SenkoCoins", callback_data="buy_art_10"),
+         InlineKeyboardButton("50 SenkoCoins", callback_data="buy_art_50")],
+        [InlineKeyboardButton("1 Telegram Star", callback_data="buy_star_1"),
+         InlineKeyboardButton("5 Telegram Stars", callback_data="buy_star_5")],
+        [InlineKeyboardButton("🔙 Back", callback_data="bonus_back")]
+    ]
+    
+    await query.edit_message_text(
+        f"🖼 <b>Buy Art</b>\n\n"
+        f"Your balance: {balance} SenkoCoins\n\n"
+        f"Choose payment method:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+# Buy art with coins
+async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
     
 # =============================================================================
 # BLOCK: SENKO COINS & ARTS (NEON VERSION)
