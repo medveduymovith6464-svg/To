@@ -3036,6 +3036,8 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         buy_common = "🟦 Common (10🪙)"
         buy_rare = "🟪 Rare (50🪙)"
+        buy_star_1 = "⭐ 1 Star"
+        buy_star_5 = "⭐⭐ 5 Stars"
         sell_text = "💰 Sell Arts"
         leaderboard_text = "🏆 Leaderboard"
         back_text = "🔙 Back"
@@ -3046,13 +3048,18 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         buy_common = "🟦 Обычный (10🪙)"
         buy_rare = "🟪 Редкий (50🪙)"
+        buy_star_1 = "⭐ 1 Звезда"
+        buy_star_5 = "⭐⭐ 5 Звёзд"
         sell_text = "💰 Продать Арты"
         leaderboard_text = "🏆 Лидерборд"
         back_text = "🔙 Назад"
     
+    # 👇 ТЕПЕРЬ ЗДЕСЬ ВСЕ КНОПКИ: и монеты, и звёзды, и продажа, и лидерборд!
     keyboard = [
         [InlineKeyboardButton(buy_common, callback_data="buy_art_10"),
          InlineKeyboardButton(buy_rare, callback_data="buy_art_50")],
+        [InlineKeyboardButton(buy_star_1, callback_data="buy_star_1"),
+         InlineKeyboardButton(buy_star_5, callback_data="buy_star_5")],
         [InlineKeyboardButton(sell_text, callback_data="sell_menu"),
          InlineKeyboardButton(leaderboard_text, callback_data="art_leaderboard")],
         [InlineKeyboardButton(back_text, callback_data="bonus_back")]
