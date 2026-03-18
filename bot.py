@@ -29,8 +29,7 @@ GAME_NAME = "Tribes: Last Standing"
 # =============================================================================
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import datetime
-
+from datetime import datetime, timedelta, date  # ✅
 def get_db():
     """Возвращает подключение к Neon PostgreSQL"""
     DATABASE_URL = os.environ.get("NEON_DB_URL")
@@ -779,7 +778,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================================================================
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает баланс рас за последние 7 дней"""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, date
     
     conn = get_db()
     c = conn.cursor()
