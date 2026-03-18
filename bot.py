@@ -778,28 +778,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # БЛОК 6: СТАТИСТИКА РАС (тут считается винрейт и решается кто имба)
 # =============================================================================
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает баланс рас за последние 7 дней"""
+    from datetime import datetime, timedelta
+    
     conn = get_db()
     c = conn.cursor()
     
-    # Считаем игры ЗА ВСЁ ВРЕМЯ (или за последние 7 дней)
-    week_ago = datetime.now().date() - datetime.timedelta(days=7)
-    c.execute("SELECT COUNT(*) FROM games WHERE date >= %s", (week_ago,))
-    total_games = c.fetchone()[0]
+    week_ago = datetime.now() - timedelta(days=7)
+    
+    # Общее количество игр за неделю
+    c.execute("SELECT COUNT(*) as count FROM games WHERE date >= %s", (week_ago,))
+    result = c.fetchone()
+    total_games = result['count'] if result else 0
     
     if total_games == 0:
-        await update.message.reply_text("📊 No games this week.", parse_mode="HTML")
+        await update.message.reply_text(
+            "📊 No games this week." if user_languages.get(update.effective_user.id, "en") == "en" 
+            else "📊 На этой неделе игр не было.",
+            parse_mode="HTML"
+        )
         conn.close()
         return
     
-    text = "📊 <b>BALANCE REPORT (last 7 days)</b>\n"
+    # Определяем язык
+    lang = user_languages.get(update.effective_user.id, "en")
+    
+    if lang == "en":
+        text = "📊 <b>BALANCE REPORT (last 7 days)</b>\n"
+    else:
+        text = "📊 <b>БАЛАНС РАС (последние 7 дней)</b>\n"
+    
     for race_id, race_data in RACES.items():
-        c.execute("SELECT COUNT(*) FROM games WHERE winner_race = %s AND date >= %s", (race_id, week_ago))
-        wins = c.fetchone()[0]
+        c.execute(
+            "SELECT COUNT(*) as wins FROM games WHERE winner_race = %s AND date >= %s", 
+            (race_id, week_ago)
+        )
+        wins_result = c.fetchone()
+        wins = wins_result['wins'] if wins_result else 0
+        
         winrate = (wins / total_games * 100) if total_games > 0 else 0
-        status = "🔥" if winrate > 27 else "💩" if winrate < 20 else "✅"
+        
+        # Эмодзи баланса
+        if winrate > 27:
+            status = "🔥"  # имба
+        elif winrate < 20:
+            status = "💩"  # слабаки
+        else:
+            status = "✅"  # норм
+        
         text += f"\n{race_data['emoji']} {race_data['name']}: {wins} wins ({winrate:.1f}%) {status}"
     
     conn.close()
+    
     await update.message.reply_text(text, parse_mode="HTML")
     
 # =============================================================================
