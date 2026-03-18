@@ -167,11 +167,59 @@ def init_db():
         c.execute("""CREATE TABLE IF NOT EXISTS weekly_stats (
             id SERIAL PRIMARY KEY,
             week_start DATE,
+# =============================================================================
+ БЛОК 2: БАЗА ДАННЫХ (PostgreSQL на Neon) - ТОЛЬКО ОДИН РАЗ!
+# =============================================================================
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import datetime
+
+def get_db():
+    """Возвращает подключение к Neon PostgreSQL"""
+    DATABASE_URL = os.environ.get("NEON_DB_URL")
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+def init_db():
+    """Создаёт таблицы, если их нет"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Таблица игроков
+        c.execute("""CREATE TABLE IF NOT EXISTS players (
+            user_id BIGINT PRIMARY KEY, 
+            username TEXT, 
+            games_played INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0, 
+            registered_at TIMESTAMP
+        )""")
+        
+        # Таблица игр
+        c.execute("""CREATE TABLE IF NOT EXISTS games (
+            id SERIAL PRIMARY KEY, 
+            date TIMESTAMP, 
+            winner_race TEXT,
+            winner_id BIGINT, 
+            players TEXT, 
+            room_id TEXT
+        )""")
+        
+        # Таблица для Сенко-коинов
+        c.execute("""CREATE TABLE IF NOT EXISTS neko_coins (
+            user_id BIGINT PRIMARY KEY,
+            coins INTEGER DEFAULT 0,
+            last_bonus DATE
+        )""")
+        
+        # Таблица для еженедельной статистики
+        c.execute("""CREATE TABLE IF NOT EXISTS weekly_stats (
+            id SERIAL PRIMARY KEY,
+            week_start DATE,
             race TEXT,
             wins INTEGER DEFAULT 0
         )""")
         
-        # 👇 ТАБЛИЦА ДЛЯ ДАТЫ СБРОСА
+        # Таблица для хранения даты последнего сброса
         c.execute("""CREATE TABLE IF NOT EXISTS reset_log (
             id SERIAL PRIMARY KEY,
             last_reset DATE
@@ -207,7 +255,100 @@ def init_db():
     except Exception as e:
         print(f"❌ Ошибка при инициализации БД: {e}")
 
-# ... все остальные функции (add_player, get_all_players, update_player_stats, save_game, save_art, load_arts_from_db) ...
+def add_player(user_id, username):
+    """Добавляет нового игрока или игнорит, если уже есть"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO players (user_id, username, registered_at) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO NOTHING",
+            (user_id, username, datetime.datetime.now())
+        )
+        conn.commit()
+        conn.close()
+        print(f"✅ Игрок {user_id} добавлен в БД")
+    except Exception as e:
+        print(f"❌ Ошибка при добавлении игрока {user_id}: {e}")
+
+def get_all_players():
+    """Возвращает список всех user_id"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT user_id FROM players")
+        users = c.fetchall()
+        conn.close()
+        return users
+    except Exception as e:
+        print(f"❌ Ошибка при получении игроков: {e}")
+        return []
+
+def update_player_stats(user_id, won=False):
+    """Обновляет статистику игрока после игры"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        if won:
+            c.execute("UPDATE players SET games_played = games_played + 1, wins = wins + 1 WHERE user_id = %s", (user_id,))
+        else:
+            c.execute("UPDATE players SET games_played = games_played + 1 WHERE user_id = %s", (user_id,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении статистики: {e}")
+
+def save_game(winner_race, winner_id, players_data, room_id):
+    """Сохраняет результаты игры"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO games (date, winner_race, winner_id, players, room_id) VALUES (%s, %s, %s, %s, %s)",
+            (datetime.datetime.now(), winner_race, winner_id, json.dumps(players_data), room_id)
+        )
+        conn.commit()
+        conn.close()
+        print(f"✅ Игра {room_id} сохранена")
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении игры: {e}")
+
+def save_art(file_id, rarity):
+    """Сохраняет арт в базу данных"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO arts (file_id, rarity, added_at) VALUES (%s, %s, %s) ON CONFLICT (file_id) DO NOTHING",
+            (file_id, rarity, datetime.datetime.now())
+        )
+        conn.commit()
+        conn.close()
+        print(f"✅ Арт сохранён в БД: {rarity}")
+    except Exception as e:
+        print(f"❌ Ошибка сохранения в БД: {e}")
+
+def load_arts_from_db():
+    """Загружает все арты из базы данных в память"""
+    global SENKO_ARTS
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT file_id, rarity FROM arts")
+        arts = c.fetchall()
+        conn.close()
+        
+        SENKO_ARTS["common"] = []
+        SENKO_ARTS["rare"] = []
+        
+        for art in arts:
+            if art['rarity'] == 'common':
+                SENKO_ARTS["common"].append(art['file_id'])
+            elif art['rarity'] == 'rare':
+                SENKO_ARTS["rare"].append(art['file_id'])
+        
+        print(f"✅ Загружено из БД: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+    except Exception as e:
+        print(f"❌ Ошибка загрузки артов из БД: {e}")
 
 async def check_weekly_reset():
     """Проверяет, не пора ли сбросить статистику"""
@@ -218,7 +359,7 @@ async def check_weekly_reset():
     c.execute("SELECT last_reset FROM reset_log ORDER BY id DESC LIMIT 1")
     last_reset = c.fetchone()
     
-    today = datetime.now().date()
+    today = datetime.datetime.now().date()
     
     # Если никогда не сбрасывали или прошло больше 7 дней
     if not last_reset or (today - last_reset['last_reset']).days >= 7:
