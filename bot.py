@@ -2723,18 +2723,39 @@ SENKO_ARTS = {"common": [], "rare": []}
 
 # Channel post handler
 async def channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Слушает посты в каналах и сохраняет арты"""
     if not update.channel_post or not update.channel_post.photo:
         return
     
     chat = update.channel_post.chat
     file_id = update.channel_post.photo[-1].file_id
     
+    # Определяем редкость по каналу
     if chat.username == "Senkocommon":
+        rarity = "common"
         SENKO_ARTS["common"].append(file_id)
-        print(f"✅ Common art added: {file_id}")
+        print(f"✅ Common art добавлен в память: {file_id[:30]}...")
     elif chat.username == "SenkoRare":
+        rarity = "rare"
         SENKO_ARTS["rare"].append(file_id)
-        print(f"✅ Rare art added: {file_id}")
+        print(f"✅ Rare art добавлен в память: {file_id[:30]}...")
+    else:
+        print(f"❌ Неизвестный канал: {chat.username}")
+        return
+    
+    # Сохраняем в базу данных
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO arts (file_id, rarity, added_at) VALUES (%s, %s, %s) ON CONFLICT (file_id) DO NOTHING",
+            (file_id, rarity, datetime.now())
+        )
+        conn.commit()
+        conn.close()
+        print(f"✅ Арт сохранён в БД: {rarity}")
+    except Exception as e:
+        print(f"❌ Ошибка сохранения в БД: {e}")
 
 # Main menu
 async def bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
