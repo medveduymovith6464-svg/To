@@ -2830,55 +2830,52 @@ async def bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Get bonus handler
 async def get_bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥🔥🔥 GET BONUS ВЫЗВАНА!")
+    
     query = update.callback_query
     await query.answer()
+    
+    # Отправляем тестовое сообщение
+    await query.edit_message_text(
+        "✅ Функция работает! Сейчас начислю монеты...",
+        parse_mode="HTML"
+    )
     
     user_id = query.from_user.id
     today = datetime.now().date()
     
-    conn = sqlite3.connect("game.db")
+    conn = get_db()
     c = conn.cursor()
     
-    c.execute("SELECT last_bonus FROM neko_coins WHERE user_id = ?", (user_id,))
-    result = c.fetchone()
+    # Проверяем баланс до
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    before = c.fetchone()
+    before_coins = before['coins'] if before else 0
     
-    if result and result[0] == today:
-        await query.edit_message_text(
-            "❌ You already claimed your daily bonus!\n"
-            "Come back tomorrow.",
-            parse_mode="HTML"
-        )
-        conn.close()
-        return
-    
-    if result:
-        c.execute("UPDATE neko_coins SET coins = coins + 10, last_bonus = ? WHERE user_id = ?",
-                  (today, user_id))
+    # Даём 10 монет (без проверки даты!)
+    if before:
+        c.execute("UPDATE neko_coins SET coins = coins + 10 WHERE user_id = %s", (user_id,))
     else:
-        c.execute("INSERT INTO neko_coins (user_id, coins, last_bonus) VALUES (?, 10, ?)",
+        c.execute("INSERT INTO neko_coins (user_id, coins, last_bonus) VALUES (%s, 10, %s)",
                   (user_id, today))
     
-    # Get new balance
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = ?", (user_id,))
-    new_balance = c.fetchone()[0]
-    
     conn.commit()
+    
+    # Проверяем баланс после
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    after = c.fetchone()
+    after_coins = after['coins'] if after else 0
+    
     conn.close()
     
-    # Return to menu
-    keyboard = [
-        [InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
-         InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")]
-    ]
-    
+    # Показываем результат
     await query.edit_message_text(
-        f"✅ <b>+10 Senko Coins!</b>\n\n"
-        f"New balance: {new_balance}💰\n\n"
-        f"Choose option:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        f"💰 Было: {before_coins}🪙\n"
+        f"➕ +10🪙\n"
+        f"💎 Стало: {after_coins}🪙\n\n"
+        f"✅ Get Bonus РАБОТАЕТ!",
         parse_mode="HTML"
     )
-
 # Buy art menu
 async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
