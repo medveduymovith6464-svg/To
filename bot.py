@@ -3199,33 +3199,58 @@ async def bonus_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def reload_arts_from_channels(bot):
-    """Загружает ВСЕ file_id из каналов при старте бота"""
-    print("🔄 Начинаю загрузку артов из каналов...")
+    """Загружает все file_id из каналов при старте бота (С ОТЛАДКОЙ)"""
+    print("🔴🔴🔴 НАЧАЛО ЗАГРУЗКИ АРТОВ 🔴🔴🔴")
     
     SENKO_ARTS["common"] = []
     SENKO_ARTS["rare"] = []
     
     try:
-        # Читаем обычный канал (ВСЕ ПОСТЫ)
+        # Пробуем получить информацию о каналах
+        try:
+            common_chat = await bot.get_chat("@Senkocommon")
+            print(f"✅ Канал @Senkocommon найден: {common_chat.title}")
+        except Exception as e:
+            print(f"❌ Канал @Senkocommon НЕ НАЙДЕН: {e}")
+        
+        try:
+            rare_chat = await bot.get_chat("@SenkoRare")
+            print(f"✅ Канал @SenkoRare найден: {rare_chat.title}")
+        except Exception as e:
+            print(f"❌ Канал @SenkoRare НЕ НАЙДЕН: {e}")
+        
+        # Читаем обычный канал
         print("📥 Читаю @Senkocommon...")
-        async for message in bot.get_chat_history("@Senkocommon"):
+        common_count = 0
+        async for message in bot.get_chat_history("@Senkocommon", limit=100):
             if message.photo:
                 file_id = message.photo[-1].file_id
                 SENKO_ARTS["common"].append(file_id)
-                print(f"  ✅ Common art: {file_id[:20]}...")
+                common_count += 1
+                print(f"  ✅ Common арт #{common_count}: {file_id[:30]}...")
+            else:
+                print(f"  ⏭️ Не фото: {message.date}")
         
-        # Читаем редкий канал (ВСЕ ПОСТЫ)
+        # Читаем редкий канал
         print("📥 Читаю @SenkoRare...")
-        async for message in bot.get_chat_history("@SenkoRare"):
+        rare_count = 0
+        async for message in bot.get_chat_history("@SenkoRare", limit=100):
             if message.photo:
                 file_id = message.photo[-1].file_id
                 SENKO_ARTS["rare"].append(file_id)
-                print(f"  ✅ Rare art: {file_id[:20]}...")
+                rare_count += 1
+                print(f"  ✅ Rare арт #{rare_count}: {file_id[:30]}...")
+            else:
+                print(f"  ⏭️ Не фото: {message.date}")
         
-        print(f"✅ Арты загружены: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+        print(f"✅ ИТОГО: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
         
     except Exception as e:
-        print(f"❌ Ошибка загрузки артов: {e}")
+        print(f"❌ ГЛОБАЛЬНАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print("🔴🔴🔴 КОНЕЦ ЗАГРУЗКИ 🔴🔴🔴")
     
 # =============================================================================
 # БЛОК: ЯЗЫК (обработчик кнопки Language)
