@@ -82,6 +82,14 @@ def init_db():
             last_reset DATE
         )""")
         
+        # 👇 НОВАЯ ТАБЛИЦА ДЛЯ АРТОВ
+        c.execute("""CREATE TABLE IF NOT EXISTS arts (
+            id SERIAL PRIMARY KEY,
+            file_id TEXT UNIQUE,
+            rarity TEXT,
+            added_at TIMESTAMP
+        )""")
+        
         conn.commit()
         conn.close()
         print("✅ База данных Neon инициализирована")
@@ -148,6 +156,40 @@ def save_game(winner_race, winner_id, players_data, room_id):
         conn.close()
     except Exception as e:
         print(f"❌ Ошибка при сохранении игры: {e}")
+
+# 👇 НОВЫЕ ФУНКЦИИ ДЛЯ АРТОВ
+def save_art(file_id, rarity):
+    """Сохраняет арт в базу данных"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO arts (file_id, rarity, added_at) VALUES (%s, %s, %s) ON CONFLICT (file_id) DO NOTHING",
+            (file_id, rarity, datetime.now())
+        )
+        conn.commit()
+        conn.close()
+        print(f"✅ Арт сохранён в БД: {rarity} - {file_id[:20]}...")
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении арта: {e}")
+
+def load_arts_from_db():
+    """Загружает все арты из базы данных при старте"""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT file_id, rarity FROM arts")
+        rows = c.fetchall()
+        conn.close()
+        
+        SENKO_ARTS["common"] = []
+        SENKO_ARTS["rare"] = []
+        for row in rows:
+            SENKO_ARTS[row['rarity']].append(row['file_id'])
+        
+        print(f"✅ Арты загружены из БД: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+    except Exception as e:
+        print(f"❌ Ошибка при загрузке артов из БД: {e}")
 
 async def check_weekly_reset():
     """Проверяет, не пора ли сбросить статистику"""
@@ -2812,18 +2854,28 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 SENKO_ARTS = {"common": [], "rare": []}
 
 async def channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Слушает посты в каналах и сохраняет арты"""
     if not update.channel_post or not update.channel_post.photo:
         return
     
     chat = update.channel_post.chat
     file_id = update.channel_post.photo[-1].file_id
     
+    # Определяем редкость по каналу
     if chat.username == "Senkocommon":
+        rarity = "common"
         SENKO_ARTS["common"].append(file_id)
-        print(f"✅ Common art added: {file_id}")
+        print(f"✅ Common art добавлен в память: {file_id[:30]}...")
     elif chat.username == "SenkoRare":
+        rarity = "rare"
         SENKO_ARTS["rare"].append(file_id)
-        print(f"✅ Rare art added: {file_id}")
+        print(f"✅ Rare art добавлен в память: {file_id[:30]}...")
+    else:
+        print(f"❌ Неизвестный канал: {chat.username}")
+        return
+    
+    # Сохраняем в базу данных
+    save_art(file_id, rarity)
 
 async def bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -3291,17 +3343,16 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============================================================================
 # БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
 # =============================================================================
-# БЛОК 10: ЗАПУСК (бот + фласк в разных потоках)
-# =============================================================================
 def run_bot():
     app = Application.builder().token(TOKEN).build()
     
-    # Загружаем арты из каналов при старте
-    async def load_arts_on_startup(context):
-        await reload_arts_from_channels(app.bot)
-        print(f"✅ Arts loaded: common={len(SENKO_ARTS['common'])}, rare={len(SENKO_ARTS['rare'])}")
+    # 👇 ЗАГРУЖАЕМ АРТЫ ИЗ БАЗЫ ПРИ СТАРТЕ
+    load_arts_from_db()
+    
+    # 👇 ПРОВЕРЯЕМ СБРОС СТАТИСТИКИ
+    async def check_reset(context):
         await check_weekly_reset()
-    app.job_queue.run_once(load_arts_on_startup, 0)
+    app.job_queue.run_once(check_reset, 0)
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("suggest", suggest))
