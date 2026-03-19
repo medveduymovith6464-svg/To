@@ -3667,11 +3667,31 @@ async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    data = query.data.split("_")
-    short_id = data[2]
-    rarity = data[3]
-    user_id = int(data[4])
+    # Пример: sell_confirm_AgACAgIAAyEFAATk..._common_6950162933
+    full_data = query.data.replace("sell_confirm_", "")
     
+    # Ищем последнее подчёркивание (перед user_id)
+    last_underscore = full_data.rfind("_")
+    if last_underscore == -1:
+        await query.edit_message_text("❌ Invalid data")
+        return
+    
+    # Всё после последнего подчёркивания — user_id
+    user_id = int(full_data[last_underscore + 1:])
+    
+    # Всё перед последним подчёркиванием — это "short_id_rarity"
+    before_last = full_data[:last_underscore]
+    
+    # Ищем предпоследнее подчёркивание (перед rarity)
+    second_last = before_last.rfind("_")
+    if second_last == -1:
+        await query.edit_message_text("❌ Invalid data")
+        return
+    
+    short_id = before_last[:second_last]
+    rarity = before_last[second_last + 1:]
+    
+    # Проверка владельца
     if query.from_user.id != user_id:
         return
     
