@@ -3581,13 +3581,22 @@ async def sell_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение продажи арта"""
     query = update.callback_query
     await query.answer()
     
     data = query.data.split("_")
-    short_id = data[1]
-    rarity = data[2]
+    # sell_common_AgACAgI..._6950162933
+    # sell_rare_AgACAgI..._6950162933
+    
+    if len(data) < 4:
+        await query.edit_message_text("❌ Invalid data")
+        return
+    
+    rarity = data[1]  # common или rare
+    
+    # Всё между rarity и user_id — это short_id
+    # Пример: ["sell", "common", "AgACAgI...", "6950162933"]
+    short_id = data[2]
     user_id = int(data[3])
     
     if query.from_user.id != user_id:
@@ -3595,30 +3604,17 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     lang = user_languages.get(user_id, "en")
     
-    # Находим полный file_id в базе
     conn = get_db()
     c = conn.cursor()
     
+    # Находим полный file_id
     c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
     result = c.fetchone()
+    conn.close()
     
     if not result:
-        if lang == "en":
-            text = "❌ Art not found!"
-        else:
-            text = "❌ Арт не найден!"
-        
-        keyboard = [[InlineKeyboardButton(
-            "🔙 Back" if lang == "en" else "🔙 Назад",
-            callback_data="sell_menu"
-        )]]
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
-        )
-        conn.close()
+        text = "❌ Art not found!" if lang == "en" else "❌ Арт не найден!"
+        await query.edit_message_text(text)
         return
     
     file_id = result['file_id']
@@ -3638,7 +3634,7 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cancel_text = "❌ Отмена"
     
     keyboard = [
-        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{file_id[-20:]}_{rarity}_{user_id}")],
+        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{short_id}_{rarity}_{user_id}")],
         [InlineKeyboardButton(cancel_text, callback_data="sell_menu")]
     ]
     
@@ -3647,8 +3643,6 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
-    
-    conn.close()
 
 async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
