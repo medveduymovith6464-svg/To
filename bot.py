@@ -3138,16 +3138,21 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Выбираем арт
         file_id = random.choice(SENKO_ARTS[rarity])
+        print(f"🎨 Выбран арт: {file_id[:30]}...")
 
         # Сохраняем в коллекцию
         c.execute("""
             INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
             VALUES (%s, %s, %s, %s)
         """, (user_id, file_id, rarity, datetime.datetime.now()))
+        print("✅ Арт сохранён в коллекцию")
 
         # Списываем монеты
         c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
+        print("✅ Монеты списаны")
+
         conn.commit()
+        print("✅ Транзакция подтверждена")
 
         # Обновляем лидерборд
         await update_art_leaderboard(user_id, conn)
@@ -3159,6 +3164,7 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=f"🎨 <b>Your {rarity} art!</b>",
             parse_mode="HTML"
         )
+        print("✅ Арт отправлен в личку")
 
         # Новый баланс
         c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
@@ -3168,9 +3174,11 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text)
 
     except Exception as e:
-        print(f"❌ Buy art error: {e}")
+        print(f"❌❌❌ ОШИБКА В buy_art_coins: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
-        text = "❌ Error. Coins refunded?" if lang == "en" else "❌ Ошибка. Монеты должны вернуться."
+        text = f"❌ Error: {type(e).__name__}: {e}" if lang == "en" else f"❌ Ошибка: {type(e).__name__}: {e}"
         await query.edit_message_text(text)
     finally:
         conn.close()
