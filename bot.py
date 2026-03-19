@@ -3110,26 +3110,32 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Покупка арта за монеты
 # -----------------------------------------------------------------------------
 async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 buy_art_coins: НАЧАЛО")
+    print("🔥 buy_art_coins: ПРОВЕРКА АРТОВ")
     query = update.callback_query
     await query.answer()
 
+    cost = 10 if "10" in query.data else 50
+    rarity = "common" if cost == 10 else "rare"
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
 
-    conn = get_db()
-    c = conn.cursor()
-
-    # Проверяем баланс
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
-    result = c.fetchone()
-    conn.close()
-
-    if not result:
-        await query.edit_message_text("❌ Нет записи в neko_coins")
+    # Проверяем наличие артов в памяти
+    if not SENKO_ARTS.get(rarity):
+        await query.edit_message_text(f"❌ Нет артов типа {rarity} в SENKO_ARTS")
         return
 
-    await query.edit_message_text(f"💰 Баланс: {result['coins']}🪙")
+    if not SENKO_ARTS[rarity]:
+        await query.edit_message_text(f"❌ Список {rarity} пуст")
+        return
+
+    # Показываем первый арт из списка
+    first_art = SENKO_ARTS[rarity][0][:30] + "..."
+    await query.edit_message_text(
+        f"✅ Арты есть!\n"
+        f"Тип: {rarity}\n"
+        f"Всего: {len(SENKO_ARTS[rarity])}\n"
+        f"Пример: {first_art}"
+    )
         
 # -----------------------------------------------------------------------------
 # Покупка арта за Telegram Stars
