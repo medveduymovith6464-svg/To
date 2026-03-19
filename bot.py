@@ -2146,15 +2146,29 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Разбираем данные
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+    
     parts = query.data.split("_")
     room_id = "_".join(parts[3:-1])
     target_user_id = int(parts[-1])
     
-    # ВРЕМЕННО: берём любой язык
-    lang = user_languages.get(target_user_id, "en")
+    if query.from_user.id != target_user_id:
+        return
     
-    # Кнопки
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    # Тексты на нужном языке
     if lang == "en":
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
@@ -2168,6 +2182,7 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         end_turn_text = "⏭ Завершить ход"
         income_text = "📊 Доход"
     
+    # НАСТОЯЩАЯ КЛАВИАТУРА
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
@@ -2177,7 +2192,7 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     await query.edit_message_text(
-        "🎮 <b>Game Menu</b>" if lang == "en" else "🎮 <b>Меню игры</b>",
+        "🎮 <b>Меню игры</b>",
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
