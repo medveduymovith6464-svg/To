@@ -3980,10 +3980,10 @@ def run_bot():
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
 
-    # 👇 ПРОДАЖА АРТОВ — ВАЖНЫЙ ПОРЯДОК!
+    # 👇 ПРОДАЖА АРТОВ — ПРАВИЛЬНЫЙ ПОРЯДОК!
     app.add_handler(CallbackQueryHandler(sell_art_execute, pattern="^sell_confirm_"))
-    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="^sell_"))
     app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="^sell_menu$"))
+    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="^sell_"))
 
     app.add_handler(CallbackQueryHandler(art_leaderboard, pattern="^art_leaderboard$"))
     
