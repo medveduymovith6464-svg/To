@@ -3118,6 +3118,8 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
 
+    print(f"\n🔥🔥🔥 ПОКУПКА АРТА: user={user_id}, rarity={rarity}")
+
     conn = get_db()
     c = conn.cursor()
 
@@ -3130,15 +3132,33 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text)
             return
 
-        # Проверяем наличие артов
+        # Проверяем наличие артов в памяти
+        print(f"📦 SENKO_ARTS[{rarity}] = {len(SENKO_ARTS.get(rarity, []))} артов")
         if not SENKO_ARTS.get(rarity) or not SENKO_ARTS[rarity]:
             text = "❌ No arts available!" if lang == "en" else "❌ Артов нет!"
             await query.edit_message_text(text)
             return
 
-        # Выбираем арт
-        file_id = random.choice(SENKO_ARTS[rarity])
-        print(f"🎨 Выбран арт: {file_id[:30]}...")
+        # Получаем список уже имеющихся артов
+        c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
+        owned_rows = c.fetchall()
+        owned = {row['art_id'] for row in owned_rows}
+        print(f"👤 У пользователя {len(owned)} артов в коллекции")
+
+        # Фильтруем доступные
+        all_arts = SENKO_ARTS[rarity]
+        available = [a for a in all_arts if a not in owned]
+        print(f"🎨 Всего {rarity} артов: {len(all_arts)}")
+        print(f"✅ Доступно для покупки: {len(available)}")
+
+        if not available:
+            text = "❌ You already have all arts!" if lang == "en" else "❌ У тебя уже есть все арты!"
+            await query.edit_message_text(text)
+            return
+
+        # Выбираем случайный доступный арт
+        file_id = random.choice(available)
+        print(f"🖼️ Выбран арт: {file_id[:30]}...")
 
         # Сохраняем в коллекцию
         c.execute("""
@@ -3174,15 +3194,13 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text)
 
     except Exception as e:
-        print(f"❌❌❌ ОШИБКА В buy_art_coins: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌❌❌ ОШИБКА: {e}")
         conn.rollback()
-        text = f"❌ Error: {type(e).__name__}: {e}" if lang == "en" else f"❌ Ошибка: {type(e).__name__}: {e}"
+        text = f"❌ Error: {type(e).__name__}" if lang == "en" else f"❌ Ошибка: {type(e).__name__}"
         await query.edit_message_text(text)
     finally:
         conn.close()
-
+        
 # -----------------------------------------------------------------------------
 # Покупка арта за Telegram Stars
 # -----------------------------------------------------------------------------
