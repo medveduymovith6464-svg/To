@@ -3151,7 +3151,7 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Выбираем арт из доступных
         file_id = random.choice(available)
 
-        # ✅ ИСПРАВЛЕНО: datetime.datetime.now() вместо datetime.now()
+        # ✅ ИСПРАВЛЕНО: datetime.datetime.now()
         c.execute("""
             INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
             VALUES (%s, %s, %s, %s)
