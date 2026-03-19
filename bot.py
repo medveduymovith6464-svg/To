@@ -3592,7 +3592,7 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     rarity = data[1]
-    short_id = data[2]
+    art_token = data[2]
     user_id = int(data[3])
     
     if query.from_user.id != user_id:
@@ -3603,18 +3603,17 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
     
-    # Ищем ВСЕ арты, которые заканчиваются на этот short_id
-    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}",))
-    results = c.fetchall()
+    # Ищем арт, который НАЧИНАЕТСЯ с этого токена
+    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"{art_token}%",))
+    result = c.fetchone()
     conn.close()
     
-    if not results:
+    if not result:
         text = "❌ Art not found!" if lang == "en" else "❌ Арт не найден!"
         await query.edit_message_text(text)
         return
     
-    # Если нашлось несколько — берём первый (но лучше переделать на точный ID)
-    file_id = results[0]['file_id']
+    file_id = result['file_id']
     price = 5 if rarity == "common" else 25
     
     if lang == "en":
@@ -3630,11 +3629,9 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         confirm_text = "✅ Продать"
         cancel_text = "❌ Отмена"
     
-    # В confirm передаём ПОЛНЫЙ file_id, а не short_id
-    full_short = file_id[-20:] if len(file_id) > 20 else file_id
-    
+    # Для подтверждения используем тот же токен
     keyboard = [
-        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{full_short}_{rarity}_{user_id}")],
+        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{art_token}_{rarity}_{user_id}")],
         [InlineKeyboardButton(cancel_text, callback_data="sell_menu")]
     ]
     
