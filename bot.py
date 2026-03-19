@@ -3518,10 +3518,18 @@ async def update_art_leaderboard(user_id, conn=None):
         conn.close()
 
 async def sell_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥🔥🔥 sell_art_menu ВЫЗВАНА!")
+    """Показывает меню продажи артов"""
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("✅ Функция sell_art_menu работает")
+    
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    # Просто показываем заглушку, чтобы убедиться, что функция работает
+    await query.edit_message_text(
+        "🛠️ Меню продажи временно отключено. Ведутся работы.",
+        parse_mode="HTML"
+    )
 
 async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение продажи арта"""
