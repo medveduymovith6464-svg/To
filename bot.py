@@ -105,6 +105,14 @@ def init_db():
             unique_arts INTEGER DEFAULT 0,
             last_updated TIMESTAMP
         )""")
+
+        # Таблица для рефералов
+        c.execute("""CREATE TABLE IF NOT EXISTS referrals (
+            user_id BIGINT PRIMARY KEY,
+            referrer_id BIGINT,
+            claimed BOOLEAN DEFAULT FALSE,
+            referred_at TIMESTAMP
+        )""")
         
         conn.commit()
         conn.close()
@@ -829,6 +837,189 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"\n{race_data['emoji']} {race_data['name']}: {wins} wins ({winrate:.1f}%) {status}"
     
     conn.close()
+    
+    await update.message.reply_text(text, parse_mode="HTML")
+
+# =============================================================================
+# БЛОК 6.5: РЕФЕРАЛЬНАЯ СИСТЕМА
+# =============================================================================
+
+async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Реферальная система: /referral [код_друга]"""
+    user_id = update.effective_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    # Если нет аргументов — показываем инструкцию
+    if not context.args:
+        # Генерируем реферальный код (просто user_id)
+        ref_code = str(user_id)
+        
+        if lang == "en":
+            text = (
+                f"🔗 <b>Referral System</b>\n\n"
+                f"Your referral code: <code>{ref_code}</code>\n\n"
+                f"How it works:\n"
+                f"1. Share this code with a friend\n"
+                f"2. Friend types /referral {ref_code}\n"
+                f"3. You both get 100 Senko Coins! 🎁\n\n"
+                f"Note: One time only per user."
+            )
+        else:
+            text = (
+                f"🔗 <b>Реферальная система</b>\n\n"
+                f"Твой реферальный код: <code>{ref_code}</code>\n\n"
+                f"Как это работает:\n"
+                f"1. Отправь этот код другу\n"
+                f"2. Друг пишет /referral {ref_code}\n"
+                f"3. Вы оба получаете 100 Сенко-коинов! 🎁\n\n"
+                f"Важно: только один раз на пользователя."
+            )
+        
+        await update.message.reply_text(text, parse_mode="HTML")
+        return
+    
+    # Есть аргумент — пытаемся активировать реферальный код
+    try:
+        referrer_id = int(context.args[0])
+    except:
+        if lang == "en":
+            await update.message.reply_text("❌ Invalid referral code. Use /referral to get your code.")
+        else:
+            await update.message.reply_text("❌ Неверный реферальный код. Используй /referral чтобы получить свой код.")
+        return
+    
+    # Нельзя рефернуть самого себя
+    if referrer_id == user_id:
+        if lang == "en":
+            await update.message.reply_text("❌ You can't refer yourself!")
+        else:
+            await update.message.reply_text("❌ Нельзя рефернуть самого себя!")
+        return
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    try:
+        # Проверяем, существует ли реферрер
+        c.execute("SELECT user_id FROM players WHERE user_id = %s", (referrer_id,))
+        if not c.fetchone():
+            if lang == "en":
+                await update.message.reply_text("❌ Referrer not found. Make sure they've started the bot with /start")
+            else:
+                await update.message.reply_text("❌ Реферрер не найден. Убедись, что он запустил бота через /start")
+            return
+        
+        # Проверяем, не активировал ли уже этот пользователь чей-то код
+        c.execute("SELECT * FROM referrals WHERE user_id = %s", (user_id,))
+        if c.fetchone():
+            if lang == "en":
+                await update.message.reply_text("❌ You've already used a referral code!")
+            else:
+                await update.message.reply_text("❌ Ты уже активировал реферальный код!")
+            return
+        
+        # Проверяем, не пытается ли он активировать код того, кто уже его рефернул (защита от цикла)
+        c.execute("SELECT * FROM referrals WHERE user_id = %s AND referrer_id = %s", (referrer_id, user_id))
+        if c.fetchone():
+            if lang == "en":
+                await update.message.reply_text("❌ Can't create referral loop!")
+            else:
+                await update.message.reply_text("❌ Нельзя создать реферальную петлю!")
+            return
+        
+        # Всё ок — начисляем бонус обоим
+        # Сначала реферреру
+        c.execute("""
+            INSERT INTO neko_coins (user_id, coins, last_bonus) 
+            VALUES (%s, 100, %s)
+            ON CONFLICT (user_id) 
+            DO UPDATE SET coins = neko_coins.coins + 100
+        """, (referrer_id, datetime.datetime.now().date()))
+        
+        # Потом новому пользователю
+        c.execute("""
+            INSERT INTO neko_coins (user_id, coins, last_bonus) 
+            VALUES (%s, 100, %s)
+            ON CONFLICT (user_id) 
+            DO UPDATE SET coins = neko_coins.coins + 100
+        """, (user_id, datetime.datetime.now().date()))
+        
+        # Записываем в историю рефералов
+        c.execute("""
+            INSERT INTO referrals (user_id, referrer_id, claimed, referred_at)
+            VALUES (%s, %s, TRUE, %s)
+        """, (user_id, referrer_id, datetime.datetime.now()))
+        
+        conn.commit()
+        
+        # Уведомляем реферрера (если можем)
+        try:
+            if lang == "en":
+                await context.bot.send_message(
+                    chat_id=referrer_id,
+                    text=f"🎉 Someone used your referral code! You got 100 Senko Coins!"
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=referrer_id,
+                    text=f"🎉 Кто-то использовал твой реферальный код! Ты получил 100 Сенко-коинов!"
+                )
+        except:
+            pass  # Если не можем отправить — игнорим
+        
+        if lang == "en":
+            await update.message.reply_text(
+                f"✅ <b>Referral successful!</b>\n\n"
+                f"You and your friend both got 100 Senko Coins! 🎁"
+            )
+        else:
+            await update.message.reply_text(
+                f"✅ <b>Реферал успешен!</b>\n\n"
+                f"Ты и твой друг получили по 100 Сенко-коинов! 🎁"
+            )
+            
+    except Exception as e:
+        print(f"❌ Referral error: {e}")
+        if lang == "en":
+            await update.message.reply_text("❌ An error occurred. Try again later.")
+        else:
+            await update.message.reply_text("❌ Произошла ошибка. Попробуй позже.")
+    finally:
+        conn.close()
+
+
+async def referral_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает статистику рефералов"""
+    user_id = update.effective_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Сколько людей привёл
+    c.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id = %s", (user_id,))
+    referred = c.fetchone()['count']
+    
+    # Активировал ли сам чей-то код
+    c.execute("SELECT referrer_id FROM referrals WHERE user_id = %s", (user_id,))
+    result = c.fetchone()
+    
+    conn.close()
+    
+    if lang == "en":
+        text = f"📊 <b>Referral Stats</b>\n\n"
+        text += f"You invited: {referred} friends\n"
+        if result:
+            text += f"You used referral code from user {result['referrer_id']}"
+        else:
+            text += f"You haven't used any referral code yet"
+    else:
+        text = f"📊 <b>Статистика рефералов</b>\n\n"
+        text += f"Ты пригласил: {referred} друзей\n"
+        if result:
+            text += f"Ты активировал код пользователя {result['referrer_id']}"
+        else:
+            text += f"Ты ещё не активировал ни одного кода"
     
     await update.message.reply_text(text, parse_mode="HTML")
     
@@ -3738,6 +3929,8 @@ def run_bot():
     app.add_handler(CommandHandler("howtoplay", help_command))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("bonus", bonus))
+    app.add_handler(CommandHandler("referral", referral))
+    app.add_handler(CommandHandler("refstats", referral_stats))  # если хочешь
     
     # ===== 2. ОСНОВНАЯ ИГРА =====
     app.add_handler(CallbackQueryHandler(cure_depression, pattern="cure_depression_"))
