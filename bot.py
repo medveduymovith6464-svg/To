@@ -3110,7 +3110,7 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Покупка арта за монеты
 # -----------------------------------------------------------------------------
 async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 buy_art_coins: ПРОВЕРКА АРТОВ")
+    print("🔥 buy_art_coins: ПРОВЕРКА КОЛЛЕКЦИИ")
     query = update.callback_query
     await query.answer()
 
@@ -3119,22 +3119,22 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
 
-    # Проверяем наличие артов в памяти
-    if not SENKO_ARTS.get(rarity):
-        await query.edit_message_text(f"❌ Нет артов типа {rarity} в SENKO_ARTS")
-        return
+    conn = get_db()
+    c = conn.cursor()
 
-    if not SENKO_ARTS[rarity]:
-        await query.edit_message_text(f"❌ Список {rarity} пуст")
-        return
+    # Получаем коллекцию пользователя
+    c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
+    owned_rows = c.fetchall()
+    owned = {row['art_id'] for row in owned_rows}
 
-    # Показываем первый арт из списка
-    first_art = SENKO_ARTS[rarity][0][:30] + "..."
+    conn.close()
+
+    # Показываем статистику
     await query.edit_message_text(
-        f"✅ Арты есть!\n"
-        f"Тип: {rarity}\n"
-        f"Всего: {len(SENKO_ARTS[rarity])}\n"
-        f"Пример: {first_art}"
+        f"📊 Статистика:\n"
+        f"Всего {rarity} артов: {len(SENKO_ARTS[rarity])}\n"
+        f"У тебя в коллекции: {len(owned)} артов\n"
+        f"Из них {rarity}: {len([a for a in owned if a in SENKO_ARTS[rarity]])}"
     )
         
 # -----------------------------------------------------------------------------
