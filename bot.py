@@ -3760,8 +3760,9 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(new_game, pattern="new_game"))
     app.add_handler(CallbackQueryHandler(play_game, pattern="play_"))
     app.add_handler(CallbackQueryHandler(cancel_game, pattern="cancel_"))
-    app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
     app.add_handler(CallbackQueryHandler(back_to_game, pattern="back_to_game_"))
+    app.add_handler(CallbackQueryHandler(back_button, pattern="back_"))
+
     
     # ===== 4. ЯЗЫК =====
     app.add_handler(CallbackQueryHandler(language_menu, pattern="language"))
