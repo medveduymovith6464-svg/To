@@ -3139,22 +3139,19 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем список уже имеющихся артов
         c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
         owned = {row['art_id'] for row in c.fetchall()}
-        print(f"👤 У пользователя {len(owned)} артов")
 
         # Фильтруем доступные
         available = [a for a in SENKO_ARTS[rarity] if a not in owned]
-        print(f"✅ Доступно для покупки: {len(available)}")
 
         if not available:
             text = "❌ You already have all arts!" if lang == "en" else "❌ У тебя уже есть все арты!"
             await query.edit_message_text(text)
             return
 
-        # ✅ ТОЛЬКО ТЕПЕРЬ выбираем арт из доступных
+        # Выбираем арт из доступных
         file_id = random.choice(available)
-        print(f"🎨 Выбран новый арт: {file_id[:30]}...")
 
-        # Сохраняем в коллекцию
+        # ✅ ИСПРАВЛЕНО: datetime.datetime.now() вместо datetime.now()
         c.execute("""
             INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
             VALUES (%s, %s, %s, %s)
@@ -3167,7 +3164,7 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обновляем лидерборд
         await update_art_leaderboard(user_id, conn)
 
-        # ✅ Отправляем арт
+        # Отправляем арт
         await context.bot.send_photo(
             chat_id=user_id,
             photo=file_id,
