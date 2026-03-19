@@ -2145,38 +2145,16 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
-    # ✅ Надёжный разбор
-    full = query.data.replace("back_to_game_", "")
-    last_underscore = full.rfind("_")
     
-    if last_underscore == -1:
-        await query.edit_message_text("❌ Ошибка формата")
-        return
+    # Разбираем данные
+    parts = query.data.split("_")
+    room_id = "_".join(parts[3:-1])
+    target_user_id = int(parts[-1])
     
-    room_id = full[:last_underscore]
-    target_user_id = int(full[last_underscore + 1:])
-
-    # Проверка владельца
-    if query.from_user.id != target_user_id:
-        return
-
-    if room_id not in active_rooms:
-        return
-
-    player = None
-    for p in active_rooms[room_id].get("players", []):
-        if p.user_id == target_user_id:
-            player = p
-            break
-
-    if not player:
-        return
-
-    # Язык
-    lang = user_languages.get(query.from_user.id, "en")
-
-    # Тексты кнопок
+    # ВРЕМЕННО: берём любой язык
+    lang = user_languages.get(target_user_id, "en")
+    
+    # Кнопки
     if lang == "en":
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
@@ -2189,8 +2167,7 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
         income_text = "📊 Доход"
-
-    # Клавиатура
+    
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
@@ -2198,7 +2175,7 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
          InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
     ]
-
+    
     await query.edit_message_text(
         "🎮 <b>Game Menu</b>" if lang == "en" else "🎮 <b>Меню игры</b>",
         reply_markup=InlineKeyboardMarkup(game_keyboard),
