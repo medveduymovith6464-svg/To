@@ -3667,33 +3667,42 @@ async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Пример: sell_confirm_AgACAgIAAyEFAATk..._common_6950162933
-    full_data = query.data.replace("sell_confirm_", "")
+    # Полная строка: sell_confirm_AgACAgIAAyEFAATk..._common_6950162933
+    full_data = query.data
+    
+    # Убираем префикс "sell_confirm_"
+    without_prefix = full_data.replace("sell_confirm_", "")
     
     # Ищем последнее подчёркивание (перед user_id)
-    last_underscore = full_data.rfind("_")
+    last_underscore = without_prefix.rfind("_")
     if last_underscore == -1:
-        await query.edit_message_text("❌ Invalid data")
+        await query.edit_message_text("❌ Invalid data format")
         return
     
     # Всё после последнего подчёркивания — user_id
-    user_id = int(full_data[last_underscore + 1:])
+    user_id_part = without_prefix[last_underscore + 1:]
+    try:
+        user_id = int(user_id_part)
+    except:
+        await query.edit_message_text("❌ Invalid user ID")
+        return
     
-    # Всё перед последним подчёркиванием — это "short_id_rarity"
-    before_last = full_data[:last_underscore]
+    # Проверка владельца
+    if query.from_user.id != user_id:
+        await query.answer()
+        return
+    
+    # Всё до последнего подчёркивания — это "short_id_rarity"
+    before_last = without_prefix[:last_underscore]
     
     # Ищем предпоследнее подчёркивание (перед rarity)
     second_last = before_last.rfind("_")
     if second_last == -1:
-        await query.edit_message_text("❌ Invalid data")
+        await query.edit_message_text("❌ Invalid data format")
         return
     
     short_id = before_last[:second_last]
     rarity = before_last[second_last + 1:]
-    
-    # Проверка владельца
-    if query.from_user.id != user_id:
-        return
     
     lang = user_languages.get(user_id, "en")
     
@@ -3701,7 +3710,7 @@ async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c = conn.cursor()
     
     try:
-        # Находим полный file_id
+        # Находим полный file_id по short_id
         c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
         result = c.fetchone()
         
@@ -3713,7 +3722,7 @@ async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = result['file_id']
         price = 5 if rarity == "common" else 25
         
-        # Удаляем ОДИН экземпляр
+        # Удаляем ОДИН экземпляр арта из коллекции
         c.execute("""
             DELETE FROM art_collections 
             WHERE user_id = %s AND art_id = %s 
@@ -3738,7 +3747,7 @@ async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обновляем лидерборд
         await update_art_leaderboard(user_id, conn)
         
-        # Новый баланс
+        # Получаем новый баланс
         c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
         new_balance = c.fetchone()['coins']
         
