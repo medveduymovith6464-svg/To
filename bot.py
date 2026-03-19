@@ -3525,11 +3525,28 @@ async def sell_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
     
-    # Просто показываем заглушку, чтобы убедиться, что функция работает
-    await query.edit_message_text(
-        "🛠️ Меню продажи временно отключено. Ведутся работы.",
-        parse_mode="HTML"
-    )
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Получаем арты пользователя
+    c.execute("""
+        SELECT art_id, rarity, COUNT(*) as count 
+        FROM art_collections 
+        WHERE user_id = %s 
+        GROUP BY art_id, rarity
+    """, (user_id,))
+    
+    user_arts = c.fetchall()
+    conn.close()
+    
+    if not user_arts:
+        text = "🖼️ You don't have any arts yet!" if lang == "en" else "🖼️ У тебя ещё нет артов!"
+        await query.edit_message_text(text)
+        return
+    
+    # Просто показываем количество артов
+    text = f"У тебя {len(user_arts)} уникальных артов. Продажа временно отключена."
+    await query.edit_message_text(text)
 
 async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение продажи арта"""
