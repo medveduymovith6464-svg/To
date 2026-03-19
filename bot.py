@@ -2145,30 +2145,38 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    # ✅ Надёжный разбор
+    full = query.data.replace("back_to_game_", "")
+    last_underscore = full.rfind("_")
     
-    user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
+    if last_underscore == -1:
+        await query.edit_message_text("❌ Ошибка формата")
+        return
     
-    parts = query.data.split("_")
-    room_id = "_".join(parts[3:-1])
-    target_user_id = int(parts[-1])
-    
+    room_id = full[:last_underscore]
+    target_user_id = int(full[last_underscore + 1:])
+
+    # Проверка владельца
     if query.from_user.id != target_user_id:
         return
-    
+
     if room_id not in active_rooms:
         return
-    
+
     player = None
     for p in active_rooms[room_id].get("players", []):
         if p.user_id == target_user_id:
             player = p
             break
-    
+
     if not player:
         return
-    
-    # Тексты на нужном языке
+
+    # Язык
+    lang = user_languages.get(query.from_user.id, "en")
+
+    # Тексты кнопок
     if lang == "en":
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
@@ -2181,8 +2189,8 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
         income_text = "📊 Доход"
-    
-    # НАСТОЯЩАЯ КЛАВИАТУРА
+
+    # Клавиатура
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{target_user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{target_user_id}")],
@@ -2190,9 +2198,9 @@ async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{target_user_id}"),
          InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{target_user_id}")]
     ]
-    
+
     await query.edit_message_text(
-        "🎮 <b>Меню игры</b>",
+        "🎮 <b>Game Menu</b>" if lang == "en" else "🎮 <b>Меню игры</b>",
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
@@ -2299,47 +2307,29 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
     
+    # Разбираем callback_data
     parts = query.data.split("_")
     room_id = "_".join(parts[1:-1])
     target_user_id = int(parts[-1])
     
-    # 👇 ВСЁ ЗАКОММЕНТИРОВАНО
-    # if query.from_user.id != target_user_id:
-    #     return
+    # 👇 ЕСЛИ НЕ ТОТ ЮЗЕР - ПРОСТО ВЫХОДИМ (НИЧЕГО НЕ ПИШЕМ)
+    if query.from_user.id != target_user_id:
+        return
     
-    # if room_id not in active_rooms:
-    #     return
+    # 👇 ЕСЛИ КОМНАТЫ НЕТ - ТИХО ВЫХОДИМ
+    if room_id not in active_rooms:
+        return
     
-    # player = None
-    # for p in active_rooms[room_id].get("players", []):
-    #     if p.user_id == target_user_id:
-    #         player = p
-    #         break
+    # Ищем игрока
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
     
-    # if not player:
-    #     return
-    
-    # 👇 ВРЕМЕННЫЙ ИГРОК, ЧТОБЫ НЕ ПАДАЛО
-    class TempPlayer:
-        def __init__(self):
-            self.food = 1000
-            self.food_limit = 1000
-            self.faith = 1000
-            self.faith_limit = 1000
-            self.labor = 1000
-            self.labor_limit = 1000
-            self.health = 1000
-            self.health_limit = 1000
-            self.intelligence = 1000
-            self.intelligence_limit = 1000
-            self.depression = 0
-            self.hate = 0
-            self.money = 0
-            self.materials = 0
-            self.population = 100
-            self.buildings = []
-    
-    player = TempPlayer()
+    # 👇 ЕСЛИ ИГРОКА НЕТ - ТИХО ВЫХОДИМ
+    if not player:
+        return
     
     # Заголовок
     title = "🏛 Your City" if lang == "en" else "🏛 Мой город"
@@ -2376,6 +2366,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cure_text = "💊 Лечить"
         back_text = "🔙 Назад"
     
+    # Формируем текст с ресурсами
     text = f"<b>{title}</b>\n\n"
     text += f"🍞 {food_text}: {player.food}/{player.food_limit}\n"
     text += f"🙏 {faith_text}: {player.faith}/{player.faith_limit}\n"
@@ -2396,6 +2387,7 @@ async def my_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(cure_text, callback_data=f"cure_depression_{room_id}_{target_user_id}")]
     ]
     
+    # Отправляем
     await query.edit_message_text(
         text,
         reply_markup=InlineKeyboardMarkup(buttons),
