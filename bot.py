@@ -3518,80 +3518,10 @@ async def update_art_leaderboard(user_id, conn=None):
         conn.close()
 
 async def sell_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает меню продажи артов"""
+    print("🔥🔥🔥 sell_art_menu ВЫЗВАНА!")
     query = update.callback_query
     await query.answer()
-    
-    user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
-    
-    conn = get_db()
-    c = conn.cursor()
-    
-    # Получаем все уникальные арты пользователя
-    c.execute("""
-        SELECT art_id, rarity, COUNT(*) as count 
-        FROM art_collections 
-        WHERE user_id = %s 
-        GROUP BY art_id, rarity
-    """, (user_id,))
-    
-    user_arts = c.fetchall()
-    
-    if not user_arts:
-        if lang == "en":
-            text = "🖼️ <b>You don't have any arts yet!</b>\nBuy some first!"
-            back_text = "🔙 Back"
-        else:
-            text = "🖼️ <b>У тебя ещё нет артов!</b>\nСначала купи!"
-            back_text = "🔙 Назад"
-        
-        keyboard = [[InlineKeyboardButton(back_text, callback_data="bonus_back")]]
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
-        )
-        conn.close()
-        return
-    
-    if lang == "en":
-        text = f"💰 <b>Sell Your Arts</b>\n\n"
-        text += f"Common: 5🪙 each\n"
-        text += f"Rare: 25🪙 each\n\n"
-        text += f"Choose an art to sell:\n"
-        sell_text = "Sell"
-        back_text = "🔙 Back"
-    else:
-        text = f"💰 <b>Продажа Артов</b>\n\n"
-        text += f"Обычный: 5🪙 за штуку\n"
-        text += f"Редкий: 25🪙 за штуку\n\n"
-        text += f"Выбери арт для продажи:\n"
-        sell_text = "Продать"
-        back_text = "🔙 Назад"
-    
-    keyboard = []
-    for art in user_arts:
-        # Берём короткий ID для callback
-        short_id = art['art_id'][-20:] if len(art['art_id']) > 20 else art['art_id']
-        rarity_emoji = "🟦" if art['rarity'] == "common" else "🟪"
-        price = 5 if art['rarity'] == "common" else 25
-        
-        button_text = f"{rarity_emoji} {art['rarity'].capitalize()} x{art['count']} | {price}🪙"
-        keyboard.append([InlineKeyboardButton(
-            button_text,
-            callback_data=f"sell_{short_id}_{art['rarity']}_{user_id}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton(back_text, callback_data="bonus_back")])
-    
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="HTML"
-    )
-    
-    conn.close()
+    await query.edit_message_text("✅ Функция sell_art_menu работает")
 
 async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение продажи арта"""
