@@ -3118,8 +3118,6 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
 
-    print(f"\n🔥🔥🔥 ПОКУПКА АРТА: user={user_id}, rarity={rarity}")
-
     conn = get_db()
     c = conn.cursor()
 
@@ -3132,8 +3130,7 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text)
             return
 
-        # Проверяем наличие артов в памяти
-        print(f"📦 SENKO_ARTS[{rarity}] = {len(SENKO_ARTS.get(rarity, []))} артов")
+        # Проверяем наличие артов
         if not SENKO_ARTS.get(rarity) or not SENKO_ARTS[rarity]:
             text = "❌ No arts available!" if lang == "en" else "❌ Артов нет!"
             await query.edit_message_text(text)
@@ -3141,14 +3138,11 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Получаем список уже имеющихся артов
         c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
-        owned_rows = c.fetchall()
-        owned = {row['art_id'] for row in owned_rows}
-        print(f"👤 У пользователя {len(owned)} артов в коллекции")
+        owned = {row['art_id'] for row in c.fetchall()}
+        print(f"👤 У пользователя {len(owned)} артов")
 
         # Фильтруем доступные
-        all_arts = SENKO_ARTS[rarity]
-        available = [a for a in all_arts if a not in owned]
-        print(f"🎨 Всего {rarity} артов: {len(all_arts)}")
+        available = [a for a in SENKO_ARTS[rarity] if a not in owned]
         print(f"✅ Доступно для покупки: {len(available)}")
 
         if not available:
@@ -3156,23 +3150,19 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text)
             return
 
-        # Выбираем случайный доступный арт
+        # ✅ ТОЛЬКО ТЕПЕРЬ выбираем арт из доступных
         file_id = random.choice(available)
-        print(f"🖼️ Выбран арт: {file_id[:30]}...")
+        print(f"🎨 Выбран новый арт: {file_id[:30]}...")
 
         # Сохраняем в коллекцию
         c.execute("""
             INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
             VALUES (%s, %s, %s, %s)
         """, (user_id, file_id, rarity, datetime.datetime.now()))
-        print("✅ Арт сохранён в коллекцию")
 
         # Списываем монеты
         c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
-        print("✅ Монеты списаны")
-
         conn.commit()
-        print("✅ Транзакция подтверждена")
 
         # Обновляем лидерборд
         await update_art_leaderboard(user_id, conn)
@@ -3184,7 +3174,6 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=f"🎨 <b>Your {rarity} art!</b>",
             parse_mode="HTML"
         )
-        print("✅ Арт отправлен в личку")
 
         # Новый баланс
         c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
@@ -3194,7 +3183,7 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text)
 
     except Exception as e:
-        print(f"❌❌❌ ОШИБКА: {e}")
+        print(f"❌❌❌ ОШИБКА В buy_art_coins: {e}")
         conn.rollback()
         text = f"❌ Error: {type(e).__name__}" if lang == "en" else f"❌ Ошибка: {type(e).__name__}"
         await query.edit_message_text(text)
