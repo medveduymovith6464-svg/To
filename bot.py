@@ -3969,7 +3969,7 @@ def run_bot():
         filters.Chat(username="@Senkocommon") | filters.Chat(username="@SenkoRare"), 
         channel_post
     ))
-    
+
     app.add_handler(CallbackQueryHandler(get_bonus, pattern="^get_bonus$"))
     app.add_handler(CallbackQueryHandler(buy_art_menu, pattern="^buy_art_menu$"))
     app.add_handler(CallbackQueryHandler(bonus_back, pattern="^bonus_back$"))
@@ -3979,16 +3979,13 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(buy_star, pattern="^buy_star_5$"))
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
-    app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="^sell_menu$"))
-    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="^sell_"))
+
+    # 👇 ПРОДАЖА АРТОВ — ВАЖНЫЙ ПОРЯДОК!
     app.add_handler(CallbackQueryHandler(sell_art_execute, pattern="^sell_confirm_"))
+    app.add_handler(CallbackQueryHandler(sell_art_confirm, pattern="^sell_"))
+    app.add_handler(CallbackQueryHandler(sell_art_menu, pattern="^sell_menu$"))
+
     app.add_handler(CallbackQueryHandler(art_leaderboard, pattern="^art_leaderboard$"))
-    
-    # ===== 6. ПРЕДЛОЖЕНИЯ АРТОВ =====
-    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_suggested_art))
-    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="^sug_c_"))
-    app.add_handler(CallbackQueryHandler(suggest_approve, pattern="^sug_r_"))
-    app.add_handler(CallbackQueryHandler(suggest_reject, pattern="^sug_x_"))
     
     # 👇 ЗАПУСКАЕМ БОТА (он БЛОКИРУЕТ выполнение)
     app.run_polling()
