@@ -3111,7 +3111,6 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Покупка арта за монеты
 # -----------------------------------------------------------------------------
 async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Покупка случайного арта за Senko Coins"""
     query = update.callback_query
     await query.answer()
 
@@ -3123,62 +3122,79 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
 
-    # Проверяем баланс
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
-    result = c.fetchone()
-    if not result or result['coins'] < cost:
-        text = f"❌ Not enough SenkoCoins!\nNeed: {cost}, You have: {result['coins'] if result else 0}" if lang == "en" \
-            else f"❌ Не хватает Сенко-коинов!\nНужно: {cost}, У тебя: {result['coins'] if result else 0}"
+    try:
+        # Проверяем баланс
+        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+        result = c.fetchone()
+        if not result or result['coins'] < cost:
+            text = f"❌ Not enough SenkoCoins!\nNeed: {cost}" if lang == "en" else f"❌ Не хватает монет!\nНужно: {cost}"
+            await query.edit_message_text(text)
+            return
+
+        # Проверяем наличие артов
+        if not SENKO_ARTS.get(rarity) or not SENKO_ARTS[rarity]:
+            text = "❌ No arts available!" if lang == "en" else "❌ Артов нет!"
+            await query.edit_message_text(text)
+            return
+
+        # Выбираем арт
+        file_id = random.choice(SENKO_ARTS[rarity])
+
+        # Пытаемся сохранить в коллекцию
+        try:
+            c.execute("""
+                INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, file_id, rarity, datetime.datetime.now()))
+        except psycopg2.errors.UniqueViolation:
+            # Если такой арт уже есть — просто выбери другой
+            conn.rollback()
+            
+            # Ищем другой арт, которого нет в коллекции
+            c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
+            owned = {row['art_id'] for row in c.fetchall()}
+            
+            available = [a for a in SENKO_ARTS[rarity] if a not in owned]
+            if not available:
+                text = "❌ You already have all arts!" if lang == "en" else "❌ У тебя уже есть все арты!"
+                await query.edit_message_text(text)
+                return
+            
+            file_id = random.choice(available)
+            c.execute("""
+                INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, file_id, rarity, datetime.datetime.now()))
+
+        # Списываем монеты
+        c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
+        conn.commit()
+
+        # Обновляем лидерборд
+        await update_art_leaderboard(user_id, conn)
+
+        # Получаем новый баланс
+        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+        new_balance = c.fetchone()['coins']
+
+        # Отправляем арт
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo=file_id,
+            caption=f"🎨 <b>Your {rarity} art!</b>",
+            parse_mode="HTML"
+        )
+
+        text = f"✅ Art sent! New balance: {new_balance}🪙" if lang == "en" else f"✅ Арт отправлен! Баланс: {new_balance}🪙"
         await query.edit_message_text(text)
-        conn.close()
-        return
 
-    # Проверяем наличие артов
-    if not SENKO_ARTS[rarity]:
-        text = "❌ No arts available yet!\nTry again later." if lang == "en" else "❌ Артов пока нет!\nПопробуй позже."
+    except Exception as e:
+        print(f"❌ Buy art error: {e}")
+        conn.rollback()
+        text = "❌ Error. Coins refunded?" if lang == "en" else "❌ Ошибка. Монеты должны вернуться."
         await query.edit_message_text(text)
+    finally:
         conn.close()
-        return
-
-    # Выбираем случайный арт
-    file_id = random.choice(SENKO_ARTS[rarity])
-
-    # Сохраняем в коллекцию пользователя
-    c.execute("""
-        INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
-        VALUES (%s, %s, %s, %s)
-    """, (user_id, file_id, rarity, datetime.datetime.now()))
-
-    # Списываем монеты
-    c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
-    conn.commit()
-
-    # Обновляем лидерборд
-    await update_art_leaderboard(user_id, conn)
-
-    # Получаем новый баланс
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
-    new_balance = c.fetchone()['coins']
-    conn.close()
-
-    # Отправляем арт в личку
-    await context.bot.send_photo(
-        chat_id=user_id,
-        photo=file_id,
-        caption=f"🎨 <b>Your {rarity} art!</b>",
-        parse_mode="HTML"
-    )
-
-    # Возвращаемся в меню
-    keyboard = [[
-        InlineKeyboardButton("🎁 Get Bonus", callback_data="get_bonus"),
-        InlineKeyboardButton("🖼 Buy Art", callback_data="buy_art_menu")
-    ]]
-
-    text = f"✅ Art sent! Check your PM.\n\nNew balance: {new_balance}🪙" if lang == "en" \
-        else f"✅ Арт отправлен! Проверь личку.\n\nНовый баланс: {new_balance}🪙"
-
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 # -----------------------------------------------------------------------------
 # Покупка арта за Telegram Stars
@@ -3648,7 +3664,6 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
 async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выполняет продажу арта"""
     query = update.callback_query
     await query.answer()
     
@@ -3665,99 +3680,58 @@ async def sell_art_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
     
-    # Находим полный file_id
-    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
-    result = c.fetchone()
-    
-    if not result:
-        if lang == "en":
-            text = "❌ Art not found!"
-        else:
-            text = "❌ Арт не найден!"
+    try:
+        # Находим полный file_id
+        c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
+        result = c.fetchone()
         
-        keyboard = [[InlineKeyboardButton(
-            "🔙 Back" if lang == "en" else "🔙 Назад",
-            callback_data="sell_menu"
-        )]]
+        if not result:
+            text = "❌ Art not found!" if lang == "en" else "❌ Арт не найден!"
+            await query.edit_message_text(text)
+            return
         
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
-        )
+        file_id = result['file_id']
+        price = 5 if rarity == "common" else 25
+        
+        # Удаляем ОДИН экземпляр
+        c.execute("""
+            DELETE FROM art_collections 
+            WHERE user_id = %s AND art_id = %s 
+            LIMIT 1
+        """, (user_id, file_id))
+        
+        if c.rowcount == 0:
+            text = "❌ You don't own this art!" if lang == "en" else "❌ У тебя нет этого арта!"
+            await query.edit_message_text(text)
+            return
+        
+        # Добавляем монеты
+        c.execute("""
+            INSERT INTO neko_coins (user_id, coins, last_bonus) 
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id) 
+            DO UPDATE SET coins = neko_coins.coins + %s
+        """, (user_id, price, datetime.datetime.now().date(), price))
+        
+        conn.commit()
+        
+        # Обновляем лидерборд
+        await update_art_leaderboard(user_id, conn)
+        
+        # Новый баланс
+        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+        new_balance = c.fetchone()['coins']
+        
+        text = f"✅ Sold! +{price}🪙\nBalance: {new_balance}🪙" if lang == "en" else f"✅ Продано! +{price}🪙\nБаланс: {new_balance}🪙"
+        await query.edit_message_text(text)
+        
+    except Exception as e:
+        print(f"❌ Sell error: {e}")
+        conn.rollback()
+        text = "❌ Error" if lang == "en" else "❌ Ошибка"
+        await query.edit_message_text(text)
+    finally:
         conn.close()
-        return
-    
-    file_id = result['file_id']
-    price = 5 if rarity == "common" else 25
-    
-    # Удаляем ОДИН экземпляр арта из коллекции
-    c.execute("""
-        DELETE FROM art_collections 
-        WHERE user_id = %s AND art_id = %s 
-        LIMIT 1
-    """, (user_id, file_id))
-    
-    if c.rowcount == 0:
-        if lang == "en":
-            text = "❌ You don't own this art!"
-        else:
-            text = "❌ У тебя нет этого арта!"
-        
-        keyboard = [[InlineKeyboardButton(
-            "🔙 Back" if lang == "en" else "🔙 Назад",
-            callback_data="sell_menu"
-        )]]
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
-        )
-        conn.close()
-        return
-    
-    # Добавляем монеты
-    c.execute("""
-        INSERT INTO neko_coins (user_id, coins, last_bonus) 
-        VALUES (%s, %s, %s)
-        ON CONFLICT (user_id) 
-        DO UPDATE SET coins = neko_coins.coins + %s
-    """, (user_id, price, datetime.now().date(), price))
-    
-    # Обновляем лидерборд
-    await update_art_leaderboard(user_id, conn)
-    
-    # Получаем новый баланс
-    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
-    new_balance = c.fetchone()['coins']
-    
-    conn.commit()
-    conn.close()
-    
-    if lang == "en":
-        text = f"✅ <b>Art sold!</b>\n\n"
-        text += f"+{price}🪙\n"
-        text += f"New balance: {new_balance}🪙"
-        menu_text = "📊 Leaderboard"
-        back_text = "🔙 Menu"
-    else:
-        text = f"✅ <b>Арт продан!</b>\n\n"
-        text += f"+{price}🪙\n"
-        text += f"Новый баланс: {new_balance}🪙"
-        menu_text = "📊 Лидерборд"
-        back_text = "🔙 Меню"
-    
-    keyboard = [
-        [InlineKeyboardButton(menu_text, callback_data="art_leaderboard")],
-        [InlineKeyboardButton(back_text, callback_data="bonus_back")]
-    ]
-    
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="HTML"
-    )
 
 async def art_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает топ игроков по количеству уникальных артов"""
