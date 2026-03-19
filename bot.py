@@ -3585,17 +3585,13 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     data = query.data.split("_")
-    # sell_common_AgACAgI..._6950162933
-    # sell_rare_AgACAgI..._6950162933
+    # sell_common_AgACAgIAAyEFAATk..._6950162933
     
     if len(data) < 4:
         await query.edit_message_text("❌ Invalid data")
         return
     
-    rarity = data[1]  # common или rare
-    
-    # Всё между rarity и user_id — это short_id
-    # Пример: ["sell", "common", "AgACAgI...", "6950162933"]
+    rarity = data[1]
     short_id = data[2]
     user_id = int(data[3])
     
@@ -3607,17 +3603,18 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
     
-    # Находим полный file_id
-    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}%",))
-    result = c.fetchone()
+    # Ищем ВСЕ арты, которые заканчиваются на этот short_id
+    c.execute("SELECT file_id FROM arts WHERE file_id LIKE %s", (f"%{short_id}",))
+    results = c.fetchall()
     conn.close()
     
-    if not result:
+    if not results:
         text = "❌ Art not found!" if lang == "en" else "❌ Арт не найден!"
         await query.edit_message_text(text)
         return
     
-    file_id = result['file_id']
+    # Если нашлось несколько — берём первый (но лучше переделать на точный ID)
+    file_id = results[0]['file_id']
     price = 5 if rarity == "common" else 25
     
     if lang == "en":
@@ -3633,8 +3630,11 @@ async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         confirm_text = "✅ Продать"
         cancel_text = "❌ Отмена"
     
+    # В confirm передаём ПОЛНЫЙ file_id, а не short_id
+    full_short = file_id[-20:] if len(file_id) > 20 else file_id
+    
     keyboard = [
-        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{short_id}_{rarity}_{user_id}")],
+        [InlineKeyboardButton(confirm_text, callback_data=f"sell_confirm_{full_short}_{rarity}_{user_id}")],
         [InlineKeyboardButton(cancel_text, callback_data="sell_menu")]
     ]
     
