@@ -3139,31 +3139,11 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Выбираем арт
         file_id = random.choice(SENKO_ARTS[rarity])
 
-        # Пытаемся сохранить в коллекцию
-        try:
-            c.execute("""
-                INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
-                VALUES (%s, %s, %s, %s)
-            """, (user_id, file_id, rarity, datetime.datetime.now()))
-        except psycopg2.errors.UniqueViolation:
-            # Если такой арт уже есть — просто выбери другой
-            conn.rollback()
-            
-            # Ищем другой арт, которого нет в коллекции
-            c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
-            owned = {row['art_id'] for row in c.fetchall()}
-            
-            available = [a for a in SENKO_ARTS[rarity] if a not in owned]
-            if not available:
-                text = "❌ You already have all arts!" if lang == "en" else "❌ У тебя уже есть все арты!"
-                await query.edit_message_text(text)
-                return
-            
-            file_id = random.choice(available)
-            c.execute("""
-                INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
-                VALUES (%s, %s, %s, %s)
-            """, (user_id, file_id, rarity, datetime.datetime.now()))
+        # Сохраняем в коллекцию
+        c.execute("""
+            INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, file_id, rarity, datetime.datetime.now()))
 
         # Списываем монеты
         c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
@@ -3172,17 +3152,17 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обновляем лидерборд
         await update_art_leaderboard(user_id, conn)
 
-        # Получаем новый баланс
-        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
-        new_balance = c.fetchone()['coins']
-
-        # Отправляем арт
+        # ✅ Отправляем арт
         await context.bot.send_photo(
             chat_id=user_id,
             photo=file_id,
             caption=f"🎨 <b>Your {rarity} art!</b>",
             parse_mode="HTML"
         )
+
+        # Новый баланс
+        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+        new_balance = c.fetchone()['coins']
 
         text = f"✅ Art sent! New balance: {new_balance}🪙" if lang == "en" else f"✅ Арт отправлен! Баланс: {new_balance}🪙"
         await query.edit_message_text(text)
