@@ -3100,7 +3100,6 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("🟪 Rare (50🪙)", callback_data="buy_art_50")],
         [InlineKeyboardButton("⭐ 1 Star", callback_data="buy_star_1"),
          InlineKeyboardButton("⭐⭐ 5 Stars", callback_data="buy_star_5")],
-        [InlineKeyboardButton("💰 Sell Arts", callback_data="sell_menu"),
          InlineKeyboardButton("🏆 Leaderboard", callback_data="art_leaderboard")],
         [InlineKeyboardButton("🔙 Back", callback_data="bonus_back")]
     ]
