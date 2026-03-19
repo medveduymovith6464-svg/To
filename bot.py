@@ -3113,7 +3113,23 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("🔥 buy_art_coins: НАЧАЛО")
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("✅ Функция вызвана")
+
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Проверяем баланс
+    c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+    result = c.fetchone()
+    conn.close()
+
+    if not result:
+        await query.edit_message_text("❌ Нет записи в neko_coins")
+        return
+
+    await query.edit_message_text(f"💰 Баланс: {result['coins']}🪙")
         
 # -----------------------------------------------------------------------------
 # Покупка арта за Telegram Stars
