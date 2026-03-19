@@ -3537,16 +3537,48 @@ async def sell_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """, (user_id,))
     
     user_arts = c.fetchall()
-    conn.close()
     
     if not user_arts:
         text = "🖼️ You don't have any arts yet!" if lang == "en" else "🖼️ У тебя ещё нет артов!"
         await query.edit_message_text(text)
+        conn.close()
         return
     
-    # Просто показываем количество артов
-    text = f"У тебя {len(user_arts)} уникальных артов. Продажа временно отключена."
-    await query.edit_message_text(text)
+    # Текст меню
+    if lang == "en":
+        text = f"💰 <b>Sell Your Arts</b>\n\n"
+        text += f"Common: 5🪙 each\n"
+        text += f"Rare: 25🪙 each\n\n"
+        text += f"Choose an art to sell:\n"
+    else:
+        text = f"💰 <b>Продажа Артов</b>\n\n"
+        text += f"Обычный: 5🪙 за штуку\n"
+        text += f"Редкий: 25🪙 за штуку\n\n"
+        text += f"Выбери арт для продажи:\n"
+    
+    # Создаём кнопки
+    keyboard = []
+    for art in user_arts:
+        short_id = art['art_id'][-20:] if len(art['art_id']) > 20 else art['art_id']
+        price = 5 if art['rarity'] == "common" else 25
+        emoji = "🟦" if art['rarity'] == "common" else "🟪"
+        
+        button_text = f"{emoji} {art['rarity'].capitalize()} x{art['count']} | {price}🪙"
+        callback = f"sell_{short_id}_{art['rarity']}_{user_id}"
+        
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=callback)])
+    
+    # Кнопка назад
+    back_text = "🔙 Back" if lang == "en" else "🔙 Назад"
+    keyboard.append([InlineKeyboardButton(back_text, callback_data="bonus_back")])
+    
+    conn.close()
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
 
 async def sell_art_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение продажи арта"""
