@@ -969,9 +969,11 @@ async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if lang == "en":
             await update.message.reply_text(
-                f"✅ <b>Referral successful!</b>\n\n"
-                f"You and your friend both got 100 Senko Coins! 🎁"
+                f"<b>✅ Referral successful!\n\n"
+                f"You and your friend both got 100 Senko Coins! 🎁</b>",
+                parse_mode="HTML"
             )
+            
         else:
             await update.message.reply_text(
                 f"✅ <b>Реферал успешен!</b>\n\n"
@@ -3577,14 +3579,15 @@ async def art_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, leader in enumerate(leaders):
             medal = medal_emojis[i] if i < 3 else f"{i+1}."
             
-            # Получаем username
-            try:
-                chat_member = await context.bot.get_chat_member(query.message.chat.id, leader['user_id'])
-                username = chat_member.user.username or chat_member.user.first_name or f"User{leader['user_id']}"
-            except:
-                username = f"User{leader['user_id']}"
+            # 👇 ПОЛУЧАЕМ USERNAME ИЗ ТАБЛИЦЫ players
+            c.execute("SELECT username FROM players WHERE user_id = %s", (leader['user_id'],))
+            player = c.fetchone()
+            if player and player['username']:
+                display_name = f"@{player['username']}"
+            else:
+                display_name = f"User{leader['user_id']}"
             
-            text += f"{medal} {username}: {leader['unique_arts']} arts\n"
+            text += f"{medal} {display_name}: {leader['unique_arts']} arts\n"
         
         text += f"\n🔹 Your rank: #{user_rank} with {user_arts} arts"
         back_text = "🔙 Back"
@@ -3597,20 +3600,21 @@ async def art_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, leader in enumerate(leaders):
             medal = medal_emojis[i] if i < 3 else f"{i+1}."
             
-            try:
-                chat_member = await context.bot.get_chat_member(query.message.chat.id, leader['user_id'])
-                username = chat_member.user.username or chat_member.user.first_name or f"User{leader['user_id']}"
-            except:
-                username = f"User{leader['user_id']}"
+            # 👇 ПОЛУЧАЕМ USERNAME ИЗ ТАБЛИЦЫ players
+            c.execute("SELECT username FROM players WHERE user_id = %s", (leader['user_id'],))
+            player = c.fetchone()
+            if player and player['username']:
+                display_name = f"@{player['username']}"
+            else:
+                display_name = f"User{leader['user_id']}"
             
-            text += f"{medal} {username}: {leader['unique_arts']} артов\n"
+            text += f"{medal} {display_name}: {leader['unique_arts']} артов\n"
         
         text += f"\n🔹 Твой ранг: #{user_rank} с {user_arts} артами"
         back_text = "🔙 Назад"
         refresh_text = "🔄 Обновить"
     
     keyboard = [
-        [InlineKeyboardButton(refresh_text, callback_data="art_leaderboard")],
         [InlineKeyboardButton(back_text, callback_data="bonus_back")]
     ]
     
