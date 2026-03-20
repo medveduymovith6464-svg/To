@@ -3110,7 +3110,7 @@ async def buy_art_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Покупка арта за монеты
 # -----------------------------------------------------------------------------
 async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 buy_art_coins: ПРОВЕРКА КОЛЛЕКЦИИ")
+    print("🔥 buy_art_coins: ПОЛНАЯ ВЕРСИЯ")
     query = update.callback_query
     await query.answer()
 
@@ -3122,20 +3122,71 @@ async def buy_art_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = get_db()
     c = conn.cursor()
 
-    # Получаем коллекцию пользователя
-    c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
-    owned_rows = c.fetchall()
-    owned = {row['art_id'] for row in owned_rows}
+    try:
+        # Проверяем баланс
+        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+        result = c.fetchone()
+        if not result or result['coins'] < cost:
+            text = f"❌ Not enough SenkoCoins!\nNeed: {cost}" if lang == "en" else f"❌ Не хватает монет!\nНужно: {cost}"
+            await query.edit_message_text(text)
+            return
 
-    conn.close()
+        # Проверяем наличие артов
+        if not SENKO_ARTS.get(rarity) or not SENKO_ARTS[rarity]:
+            text = "❌ No arts available!" if lang == "en" else "❌ Артов нет!"
+            await query.edit_message_text(text)
+            return
 
-    # Показываем статистику
-    await query.edit_message_text(
-        f"📊 Статистика:\n"
-        f"Всего {rarity} артов: {len(SENKO_ARTS[rarity])}\n"
-        f"У тебя в коллекции: {len(owned)} артов\n"
-        f"Из них {rarity}: {len([a for a in owned if a in SENKO_ARTS[rarity]])}"
-    )
+        # Получаем коллекцию
+        c.execute("SELECT art_id FROM art_collections WHERE user_id = %s", (user_id,))
+        owned = {row['art_id'] for row in c.fetchall()}
+
+        # Фильтруем доступные
+        available = [a for a in SENKO_ARTS[rarity] if a not in owned]
+
+        if not available:
+            text = "❌ You already have all arts!" if lang == "en" else "❌ У тебя уже есть все арты!"
+            await query.edit_message_text(text)
+            return
+
+        # Выбираем арт
+        file_id = random.choice(available)
+
+        # ✅ Сохраняем
+        c.execute("""
+            INSERT INTO art_collections (user_id, art_id, rarity, opened_at)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, file_id, rarity, datetime.datetime.now()))
+
+        # Списываем монеты
+        c.execute("UPDATE neko_coins SET coins = coins - %s WHERE user_id = %s", (cost, user_id))
+        conn.commit()
+
+        # Обновляем лидерборд
+        await update_art_leaderboard(user_id, conn)
+
+        # ✅ Отправляем арт
+        await context.bot.send_photo(
+            chat_id=user_id,
+            photo=file_id,
+            caption=f"🎨 <b>Your {rarity} art!</b>",
+            parse_mode="HTML"
+        )
+
+        # Новый баланс
+        c.execute("SELECT coins FROM neko_coins WHERE user_id = %s", (user_id,))
+        new_balance = c.fetchone()['coins']
+
+        text = f"✅ Art sent! New balance: {new_balance}🪙" if lang == "en" else f"✅ Арт отправлен! Баланс: {new_balance}🪙"
+        await query.edit_message_text(text)
+
+    except Exception as e:
+        print(f"❌❌❌ ОШИБКА: {e}")
+        conn.rollback()
+        text = f"❌ Error: {type(e).__name__}" if lang == "en" else f"❌ Ошибка: {type(e).__name__}"
+        await query.edit_message_text(text)
+    finally:
+        conn.close()
         
 # -----------------------------------------------------------------------------
 # Покупка арта за Telegram Stars
