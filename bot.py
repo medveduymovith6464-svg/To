@@ -1571,83 +1571,100 @@ async def start_game(room_id, context, chat_id):
     )
 
 async def check_game_over(room_id, context):
-    """Проверяет, не закончилась ли игра (только для активных игроков)"""
+    """Проверяет, не закончилась ли игра"""
     if room_id not in active_rooms:
         return False
     
-    # Берём ТОЛЬКО тех, кто уже в игре (выбрали расу и живы)
     players = active_rooms[room_id].get("players", [])
+    chat_id = active_rooms[room_id]["chat_id"]
+    lang = active_rooms[room_id].get("lang", "en")
     
-    # Если ещё нет 2 игроков - игра не началась
     if len(players) != 2:
         return False
     
     alive_players = []
     
     for player in players:
-        # Проверяем, жив ли игрок
         if player.population <= 0:
-            continue  # Мёртв
+            continue
         if player.food <= 0 and player.race_id != "demon":
-            continue  # Умер с голоду (кроме демонов)
+            continue
         if player.depression >= 100:
-            continue  # Психологическая смерть
-        
+            continue
         alive_players.append(player)
     
-    # Если остался только один живой
+    # Игра не закончена
+    if len(alive_players) == 2:
+        return False
+    
+    # Получаем имена игроков
+    player1_name = "Игрок 1"
+    player2_name = "Игрок 2"
+    
+    try:
+        chat_member1 = await context.bot.get_chat_member(chat_id, players[0].user_id)
+        player1_name = chat_member1.user.username or chat_member1.user.first_name or str(players[0].user_id)
+    except:
+        player1_name = str(players[0].user_id)
+    
+    try:
+        chat_member2 = await context.bot.get_chat_member(chat_id, players[1].user_id)
+        player2_name = chat_member2.user.username or chat_member2.user.first_name or str(players[1].user_id)
+    except:
+        player2_name = str(players[1].user_id)
+    
+    # Формируем сообщение
     if len(alive_players) == 1:
         winner = alive_players[0]
+        loser = players[1] if players[0].user_id == winner.user_id else players[0]
         
-        # Отправляем результат ТОЛЬКО живым
-        for player in players:
-            try:
-                if player.user_id == winner.user_id:
-                    await context.bot.send_message(
-                        chat_id=player.user_id,
-                        text=f"🎉 **YOU WIN!**\n"
-                             f"Your civilization survives!",
-                        parse_mode="HTML"
-                    )
-                else:
-                    # Проигравший уже мёртв, но отправляем ему уведомление
-                    await context.bot.send_message(
-                        chat_id=player.user_id,
-                        text=f"💔 **Game Over**\n"
-                             f"Your civilization has fallen.",
-                        parse_mode="HTML"
-                    )
-            except:
-                pass
+        winner_name = player1_name if winner.user_id == players[0].user_id else player2_name
+        loser_name = player2_name if winner.user_id == players[0].user_id else player1_name
         
-        # 👇 СОХРАНЯЕМ В NEON (вместо SQLite)
+        if lang == "en":
+            text = (
+                f"🏆 <b>GAME OVER</b>\n\n"
+                f"Winner: {winner_name} ({winner.race_id})\n"
+                f"Loser: {loser_name} ({loser.race_id})"
+            )
+        else:
+            text = (
+                f"🏆 <b>ИГРА ОКОНЧЕНА</b>\n\n"
+                f"Победитель: {winner_name} ({winner.race_id})\n"
+                f"Проигравший: {loser_name} ({loser.race_id})"
+            )
+        
+        # Сохраняем результат
         players_data = [{"user_id": p.user_id, "race": p.race_id, "alive": (p in alive_players)} for p in players]
         save_game(winner.race_id, winner.user_id, players_data, room_id)
         
-        del active_rooms[room_id]
-        return True
-    
-    # Если оба мертвы (ничья)
-    if len(alive_players) == 0 and len(players) == 2:
-        for player in players:
-            try:
-                await context.bot.send_message(
-                    chat_id=player.user_id,
-                    text=f"💀 **Draw!**\n"
-                         f"Both civilizations destroyed each other.",
-                    parse_mode="HTML"
-                )
-            except:
-                pass
+    else:  # Ничья (0 живых)
+        if lang == "en":
+            text = (
+                f"💀 <b>GAME OVER</b>\n\n"
+                f"Both civilizations destroyed each other!\n"
+                f"Draw!"
+            )
+        else:
+            text = (
+                f"💀 <b>ИГРА ОКОНЧЕНА</b>\n\n"
+                f"Обе цивилизации уничтожили друг друга!\n"
+                f"Ничья!"
+            )
         
-        # 👇 ТОЖЕ СОХРАНЯЕМ (ничья)
         players_data = [{"user_id": p.user_id, "race": p.race_id, "alive": False} for p in players]
         save_game("draw", 0, players_data, room_id)
-        
-        del active_rooms[room_id]
-        return True
     
-    return False
+    # Отправляем одно сообщение в чат
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode="HTML"
+    )
+    
+    # Удаляем комнату
+    del active_rooms[room_id]
+    return True
 
 async def next_round(room_id, context):
     """Начисляет доходы, расходы и возвращает список событий"""
