@@ -2165,20 +2165,20 @@ async def cancel_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "en")
-    
     parts = query.data.split("_")
     room_id = "_".join(parts[1:-1])
     target_user_id = int(parts[-1])
-    
+
     if query.from_user.id != target_user_id:
         return
-    
+
     if room_id not in active_rooms:
         return
-    
+
+    # Находим игроков
     player = None
     other_player = None
     for p in active_rooms[room_id].get("players", []):
@@ -2186,37 +2186,65 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
             player = p
         else:
             other_player = p
-    
+
     if not player or not other_player:
         return
-    
+
     chat_id = active_rooms[room_id]["chat_id"]
     try:
         chat_member = await context.bot.get_chat_member(chat_id, other_player.user_id)
         enemy_name = chat_member.user.username or chat_member.user.first_name or str(other_player.user_id)
     except:
         enemy_name = str(other_player.user_id)
-    
+
+    # Проверяем ресурсы на войну
+    FAITH_COST = 150
+    FOOD_COST = 300
+    MONEY_COST = 200
+
+    if player.faith < FAITH_COST or player.food < FOOD_COST or player.money < MONEY_COST:
+        if lang == "en":
+            text = f"❌ <b>Not enough resources for war!</b>\n\nNeed:\n🙏 Faith: {FAITH_COST}\n🍞 Food: {FOOD_COST}\n💰 Money: {MONEY_COST}\n\nYou have:\n🙏 Faith: {player.faith}\n🍞 Food: {player.food}\n💰 Money: {player.money}"
+        else:
+            text = f"❌ <b>Не хватает ресурсов для войны!</b>\n\nНужно:\n🙏 Веры: {FAITH_COST}\n🍞 Еды: {FOOD_COST}\n💰 Денег: {MONEY_COST}\n\nУ тебя:\n🙏 Веры: {player.faith}\n🍞 Еды: {player.food}\n💰 Денег: {player.money}"
+
+        back_button = [[InlineKeyboardButton("🔙 Back" if lang == "en" else "🔙 Назад", callback_data=f"back_to_game_{room_id}_{target_user_id}")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(back_button), parse_mode="HTML")
+        return
+
+    # Текст подтверждения
     if lang == "en":
-        text = (f"⚔️ <b>Attack {enemy_name}?</b>\n\n"
-                f"Your army: {player.population} units\n"
-                f"Enemy army: {other_player.population} units\n\n"
-                f"40% of your army will fight.")
-        confirm_text = "✅ Attack!"
+        text = (
+            f"⚔️ <b>Declare war on {enemy_name}?</b>\n\n"
+            f"Cost:\n"
+            f"🙏 Faith: {FAITH_COST}\n"
+            f"🍞 Food: {FOOD_COST}\n"
+            f"💰 Money: {MONEY_COST}\n\n"
+            f"⚡ <b>Battle rules:</b>\n"
+            f"The war will end when one side loses 25 units.\n\n"
+            f"Are you sure?"
+        )
+        confirm_text = "✅ Declare War!"
         back_text = "🔙 Back"
     else:
-        text = (f"⚔️ <b>Атаковать {enemy_name}?</b>\n\n"
-                f"Твоя армия: {player.population} юнитов\n"
-                f"Армия врага: {other_player.population} юнитов\n\n"
-                f"40% твоей армии пойдут в бой.")
-        confirm_text = "✅ Атаковать!"
+        text = (
+            f"⚔️ <b>Начать войну с {enemy_name}?</b>\n\n"
+            f"Стоимость:\n"
+            f"🙏 Веры: {FAITH_COST}\n"
+            f"🍞 Еды: {FOOD_COST}\n"
+            f"💰 Денег: {MONEY_COST}\n\n"
+            f"⚡ <b>Правила битвы:</b>\n"
+            f"Война закончится, когда одна из сторон потеряет 25 юнитов.\n\n"
+            f"Ты уверен?"
+        )
+        confirm_text = "✅ Начать войну!"
         back_text = "🔙 Назад"
-    
+
     buttons = [
         [InlineKeyboardButton(confirm_text, callback_data=f"attack_{room_id}_{other_player.user_id}_{target_user_id}")],
         [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]
     ]
-    
+
     await query.edit_message_text(
         text,
         reply_markup=InlineKeyboardMarkup(buttons),
@@ -2226,18 +2254,18 @@ async def war(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     parts = query.data.split("_")
     room_id = "_".join(parts[1:-2])
     enemy_id = int(parts[-2])
     attacker_id = int(parts[-1])
-    
+
     if query.from_user.id != attacker_id:
         return
-    
+
     if room_id not in active_rooms:
         return
-    
+
     attacker = None
     defender = None
     for p in active_rooms[room_id].get("players", []):
@@ -2245,79 +2273,77 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             attacker = p
         elif p.user_id == enemy_id:
             defender = p
-    
+
     if not attacker or not defender:
         return
-    
+
     lang = active_rooms[room_id].get("lang", "en")
-    
-    # 👇 40% АРМИИ (было 20%)
-    attack_force = attacker.population * 40 // 100
-    defend_force = defender.population * 40 // 100
-    
-    # Расчёт силы
-    attack_power = attack_force * attacker.bloodlust
-    defense_power = defend_force * defender.health
-    
-    # Крит от ненависти
+    chat_id = active_rooms[room_id]["chat_id"]
+
+    # 1. ПРОВЕРКА РЕСУРСОВ (НОВЫЕ ЦЕНЫ)
+    FAITH_COST = 150
+    FOOD_COST = 300
+    MONEY_COST = 200
+
+    if attacker.faith < FAITH_COST or attacker.food < FOOD_COST or attacker.money < MONEY_COST:
+        if lang == "en":
+            text = f"❌ <b>Not enough resources for war!</b>\n\nNeed:\n🙏 Faith: {FAITH_COST}\n🍞 Food: {FOOD_COST}\n💰 Money: {MONEY_COST}\n\nYou have:\n🙏 Faith: {attacker.faith}\n🍞 Food: {attacker.food}\n💰 Money: {attacker.money}"
+        else:
+            text = f"❌ <b>Не хватает ресурсов для войны!</b>\n\nНужно:\n🙏 Веры: {FAITH_COST}\n🍞 Еды: {FOOD_COST}\n💰 Денег: {MONEY_COST}\n\nУ тебя:\n🙏 Веры: {attacker.faith}\n🍞 Еды: {attacker.food}\n💰 Денег: {attacker.money}"
+        await query.edit_message_text(text, parse_mode="HTML")
+        return
+
+    # 2. СПИСЫВАЕМ РЕСУРСЫ
+    attacker.faith -= FAITH_COST
+    attacker.food -= FOOD_COST
+    attacker.money -= MONEY_COST
+
+    # 3. БОЙ
+    attacker_units = attacker.population
+    defender_units = defender.population
+
+    attacker_power = attacker_units * attacker.bloodlust * attacker.health
+    defender_power = defender_units * defender.bloodlust * defender.health
+
     crit_msg = ""
     if attacker.hate > 0 and random.random() < attacker.hate / 100:
-        attack_power *= 2
+        attacker_power *= 2
         attacker.hate = 0
         crit_msg = "🔥 CRIT! " if lang == "en" else "🔥 КРИТ! "
-    
-    # Расчёт потерь
-    if attack_power > defense_power:
-        defender_losses = min(defend_force, (attack_power - defense_power) // defender.health + 1)
-        attacker_losses = attack_force // 4
-    else:
-        attacker_losses = min(attack_force, (defense_power - attack_power) // attacker.health + 1)
-        defender_losses = defend_force // 4
-    
+
+    total_power = attacker_power + defender_power
+    if total_power == 0:
+        total_power = 1
+
+    attacker_losses = int(attacker_units * (defender_power / total_power))
+    defender_losses = int(defender_units * (attacker_power / total_power))
+
+    # Применяем потери
     attacker.population = max(0, attacker.population - attacker_losses)
     defender.population = max(0, defender.population - defender_losses)
 
-# 👇 НЕКРОПОЛЬ - воскрешает 10% погибших после боя
+    # Некрополь
     if "necropolis" in attacker.buildings:
         resurrect = attacker_losses * 10 // 100
         attacker.population += resurrect
-    # можно оставить здание (постоянный эффект) или удалить (одноразовый)
-    # attacker.buildings.remove("necropolis")  # раскомментируй, если одноразовый
-
     if "necropolis" in defender.buildings:
         resurrect = defender_losses * 10 // 100
         defender.population += resurrect
-    # defender.buildings.remove("necropolis")  # раскомментируй, если одноразовый
-    
-    chat_id = active_rooms[room_id]["chat_id"]
+
+    # Имена
     try:
         attacker_name = (await context.bot.get_chat_member(chat_id, attacker_id)).user.username or str(attacker_id)
         defender_name = (await context.bot.get_chat_member(chat_id, enemy_id)).user.username or str(enemy_id)
     except:
         attacker_name = str(attacker_id)
         defender_name = str(enemy_id)
-    
-    # 👇 АВТОМАТИЧЕСКАЯ ПЕРЕДАЧА ХОДА
-    # Находим другого игрока
-    other_player = defender  # противник становится следующим
-    
-    # Меняем очередь
-    active_rooms[room_id]["allowed"] = [other_player.user_id]
-    active_rooms[room_id]["current_player"] = other_player.user_id
-    active_rooms[room_id]["turn"] = active_rooms[room_id].get("turn", 1) + 1
-    
-    # Проверяем, не закончилась ли игра
-    if await check_game_over(room_id, context):
-        return
-    
-    # Тексты с результатом
+
+    # Сообщение
     if lang == "en":
         result = (f"{crit_msg}⚔️ <b>Battle Results</b>\n\n"
                   f"{attacker_name}\n├ Lost: {attacker_losses}\n└ Left: {attacker.population}\n\n"
-                  f"{defender_name}\n├ Lost: {defender_losses}\n└ Left: {defender.population}\n\n"
-                  f"🔄 Turn passed to {defender_name}")
-        
-        # Кнопки для следующего игрока
+                  f"{defender_name}\n├ Lost: {defender_losses}\n└ Left: {defender.population}")
+        result += f"\n\n🔄 Turn passed to {defender_name}"
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
@@ -2326,16 +2352,20 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         result = (f"{crit_msg}⚔️ <b>Результаты битвы</b>\n\n"
                   f"{attacker_name}\n├ Потери: {attacker_losses}\n└ Осталось: {attacker.population}\n\n"
-                  f"{defender_name}\n├ Потери: {defender_losses}\n└ Осталось: {defender.population}\n\n"
-                  f"🔄 Ход передан {defender_name}")
-        
+                  f"{defender_name}\n├ Потери: {defender_losses}\n└ Осталось: {defender.population}")
+        result += f"\n\n🔄 Ход передан {defender_name}"
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
         end_turn_text = "⏭ Завершить ход"
         income_text = "📊 Доход"
-    
-    # 👇 КНОПКИ ДЛЯ НОВОГО ИГРОКА (уже без "Attack", только меню)
+
+    # Передача хода
+    other_player = defender
+    active_rooms[room_id]["allowed"] = [other_player.user_id]
+    active_rooms[room_id]["current_player"] = other_player.user_id
+    active_rooms[room_id]["turn"] = active_rooms[room_id].get("turn", 1) + 1
+
     game_keyboard = [
         [InlineKeyboardButton(my_city_text, callback_data=f"mycity_{room_id}_{other_player.user_id}"),
          InlineKeyboardButton(build_text, callback_data=f"build_{room_id}_{other_player.user_id}")],
@@ -2343,13 +2373,13 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(end_turn_text, callback_data=f"endturn_{room_id}_{other_player.user_id}"),
          InlineKeyboardButton(income_text, callback_data=f"income_{room_id}_{other_player.user_id}")]
     ]
-    
+
     await query.edit_message_text(
         result,
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
-    
+
     await check_game_over(room_id, context)
 
 async def back_to_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
