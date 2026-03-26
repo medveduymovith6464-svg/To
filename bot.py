@@ -1666,182 +1666,6 @@ async def check_game_over(room_id, context):
     del active_rooms[room_id]
     return True
 
-async def next_round(room_id, context):
-    """Начисляет доходы, расходы и возвращает список событий"""
-    if room_id not in active_rooms:
-        return []
-    
-    players = active_rooms[room_id].get("players", [])
-    current_round = active_rooms[room_id].get("round", 1)
-    chat_id = active_rooms[room_id]["chat_id"]
-    lang = active_rooms[room_id].get("lang", "en")
-    
-    events_list = []  # список событий для вывода
-    
-    # 👇 ПРОВЕРКА НА 100 РАУНД (ГАРАНТИРОВАННАЯ СЕНКО)
-    if current_round >= 100:
-        if lang == "en":
-            senko_text = "🦊 <b>SENKO'S VISIT!</b>\n\nAt round 100, Senko in Niko's outfit came and said:\n✨ <i>\"You've played so long... Time to rest!\"</i>\n\nGame over. Everyone wins! 🏆"
-        else:
-            senko_text = "🦊 <b>СЕНКО В ГОСТЯХ!</b>\n\nНа 100 раунде к вам пришла Сенко в костюме Нико и сказала:\n✨ <i>«Вы так долго играли... Пора отдохнуть!»</i>\n\nИгра завершена. Все молодцы! 🏆"
-        
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=senko_text,
-            parse_mode="HTML"
-        )
-        del active_rooms[room_id]
-        return []
-    
-    for player in players:
-        # 1. ДОХОД ОТ ЗДАНИЙ
-        for building_id in player.buildings:
-            building = BUILDINGS.get(building_id)
-            if building and building.get("round_income"):
-                for resource, value in building["round_income"].items():
-                    if hasattr(player, resource):
-                        current = getattr(player, resource)
-                        setattr(player, resource, current + value)
-        
-        # 2. БАЗОВЫЙ ДОХОД ЗА РАУНД (500 очков)
-        player.dev_points += 500
-        
-        # 3. ПРОЦЕНТНЫЙ РОСТ ОТ ДОМОВ
-        if player.population_growth > 0:
-            growth = int(player.population * player.population_growth / 100)
-            player.population += max(1, growth)
-        
-        # 4. СОБЫТИЯ ДЛЯ КАЖДОГО ИГРОКА (75% шанс)
-        if random.randint(1, 100) <= 75:
-            # Выбираем событие по шансам
-            events_pool = []
-            for event in EVENTS:
-                weight = int(event["chance"] * 10)  # 0.1% -> 1, 1% -> 10, 10% -> 100
-                events_pool.extend([event] * weight)
-            
-            chosen_event = random.choice(events_pool)
-            
-            # Применяем эффект к игроку
-            chosen_event["effect"](player)
-            
-            # Получаем нормальное имя игрока
-            try:
-                chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
-                player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
-            except:
-                player_name = str(player.user_id)
-            
-            # Добавляем в список событий
-            if lang == "en":
-                events_list.append(f"👤 {player_name}: {chosen_event['desc_en']}")
-            else:
-                events_list.append(f"👤 {player_name}: {chosen_event['desc_ru']}")
-        
-        # 5. РАСХОДЫ (ЕДА)
-        food_consumed = player.calculate_food_consumption()
-        player.food -= food_consumed
-        
-        # Если еда ушла в минус - штрафуем население
-        if player.food < 0:
-            starvation = abs(player.food) // 10 + 1
-            player.population = max(0, player.population - starvation)
-            player.food = 0
-        
-        # 6. ДЕПРЕССИЯ
-        player.depression += 1
-        player.apply_depression()
-        
-        # 👇 7. БУНТ (если вера < 200, шанс 10%)
-        if player.faith < 200 and random.randint(1, 100) <= 10:
-            # Бунт!
-            losses = max(1, player.population // 3)  # 30% населения
-            player.population -= losses
-            player.depression += 5
-            
-            # Получаем имя игрока
-            try:
-                chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
-                player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
-            except:
-                player_name = str(player.user_id)
-            
-            if lang == "en":
-                revolt_text = f"🔥 <b>REVOLT!</b>\n{player_name} lost {losses} units, +5 depression!"
-            else:
-                revolt_text = f"🔥 <b>БУНТ!</b>\n{player_name} потерял {losses} юнитов, +5 депрессии!"
-            
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=revolt_text,
-                parse_mode="HTML"
-            )
-        
-        # 8. ЛИМИТЫ
-        player.food = min(player.food, player.food_limit)
-        player.faith = min(player.faith, player.faith_limit)
-        player.labor = min(player.labor, player.labor_limit)
-        player.health = min(player.health, player.health_limit)
-        player.intelligence = min(player.intelligence, player.intelligence_limit)
-        player.money = min(player.money, 10000)
-        player.materials = min(player.materials, 10000)
-        player.dev_points = min(player.dev_points, 10000)
-        player.population = min(player.population, 10000)
-    
-    await check_game_over(room_id, context)
-    return events_list
-
-async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    lang = user_languages.get(user_id, "en")
-    
-    parts = query.data.split("_")
-    room_id = "_".join(parts[1:-1])
-    target_user_id = int(parts[-1])
-    
-    if query.from_user.id != target_user_id:
-        return
-    
-    if room_id not in active_rooms:
-        return
-    
-    player = None
-    for p in active_rooms[room_id].get("players", []):
-        if p.user_id == target_user_id:
-            player = p
-            break
-    
-    if not player:
-        return
-    
-    # Тексты подтверждения
-    if lang == "en":
-        confirm_text = ("⚠️ <b>Are you sure you want to end your turn?</b>\n\n"
-                       "Once you end your turn, you won't be able to take any more actions until your next turn.")
-        yes_text = "✅ Yes"
-        no_text = "❌ No"
-        back_text = "🔙 Back"
-    else:
-        confirm_text = ("⚠️ <b>Ты уверен, что хочешь закончить ход?</b>\n\n"
-                       "После завершения хода ты не сможешь делать действия до следующего хода.")
-        yes_text = "✅ Да"
-        no_text = "❌ Нет"
-        back_text = "🔙 Назад"
-    
-    confirm_keyboard = [
-        [InlineKeyboardButton(yes_text, callback_data=f"confirm_endturn_{room_id}_{target_user_id}"),
-         InlineKeyboardButton(no_text, callback_data=f"cancel_endturn_{room_id}_{target_user_id}")],
-        [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]
-    ]
-    
-    await query.edit_message_text(
-        text=confirm_text,
-        reply_markup=InlineKeyboardMarkup(confirm_keyboard),
-        parse_mode="HTML"
-    )
-
 async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1900,11 +1724,9 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stolen = False
     steal_text = ""
     if player.race_id == "elf" and random.randint(1, 100) <= 5:
-        # Крадём ход — оставляем текущего игрока
         other_player = player
         stolen = True
         
-        # Получаем имя для сообщения
         try:
             chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
             player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
@@ -1924,7 +1746,6 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_rooms[room_id]["allowed"] = [player.user_id]
         active_rooms[room_id]["current_player"] = player.user_id
     
-    # Увеличиваем номер хода
     active_rooms[room_id]["turn"] = current_turn + 1
     
     # 👇 ВЫЗЫВАЕМ next_round И ПОЛУЧАЕМ СПИСОК СОБЫТИЙ
@@ -1933,7 +1754,7 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await check_game_over(room_id, context):
         return
     
-    # 👇 ЕСЛИ БЫЛА КРАЖА — ПОКАЗЫВАЕМ ОТДЕЛЬНОЕ СООБЩЕНИЕ
+    # 👇 ЕСЛИ БЫЛА КРАЖА — ПОКАЗЫВАЕМ ОТДЕЛЬНО (но можно и в сообщение добавить)
     if stolen:
         back_keyboard = [[InlineKeyboardButton("🔙 Back" if lang == "en" else "🔙 Назад", 
                                               callback_data=f"delete_steal_{room_id}_{target_user_id}")]]
@@ -1946,33 +1767,16 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         active_rooms[room_id]["steal_msg_id"] = sent_msg.message_id
     
-    # 👇 ЕСЛИ БЫЛИ СОБЫТИЯ — ПОКАЗЫВАЕМ ИХ
-    if events:
-        if lang == "en":
-            event_title = "🎲 <b>EVENTS THIS ROUND!</b>"
-            back_text = "🔙 Back to Game"
-        else:
-            event_title = "🎲 <b>СОБЫТИЯ РАУНДА!</b>"
-            back_text = "🔙 В игру"
-        
-        events_text = event_title + "\n\n" + "\n".join(events)
-        
-        back_keyboard = [[InlineKeyboardButton(back_text, callback_data=f"delete_events_{room_id}_{other_player.user_id}")]]
-        
-        sent_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=events_text,
-            reply_markup=InlineKeyboardMarkup(back_keyboard),
-            parse_mode="HTML"
-        )
-        active_rooms[room_id]["events_msg_id"] = sent_msg.message_id
-    
-    # Тексты с номером раунда
+    # 👇 ТЕПЕРЬ СОБЫТИЯ ВНУТРИ СООБЩЕНИЯ О ХОДЕ
     if lang == "en":
         turn_ended_text = (f"🔄 <b>Turn ended!</b>\n\n"
                           f"📅 Round {current_round}\n"
                           f"👤 {current_name} finished their turn.\n"
                           f"🎮 Now <b>{next_name}</b>'s turn!")
+        
+        if events:
+            turn_ended_text += f"\n\n🎲 <b>Events this round:</b>\n" + "\n".join(events)
+        
         my_city_text = "🏛 My City"
         build_text = "⚒ Build"
         war_text = "⚔️ War"
@@ -1983,6 +1787,10 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
                           f"📅 Раунд {current_round}\n"
                           f"👤 {current_name} завершил ход.\n"
                           f"🎮 Теперь ходит <b>{next_name}</b>!")
+        
+        if events:
+            turn_ended_text += f"\n\n🎲 <b>События раунда:</b>\n" + "\n".join(events)
+        
         my_city_text = "🏛 Мой город"
         build_text = "⚒ Строить"
         war_text = "⚔️ Война"
@@ -2002,6 +1810,165 @@ async def confirm_endturn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(game_keyboard),
         parse_mode="HTML"
     )
+
+async def end_turn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    lang = user_languages.get(user_id, "en")
+    
+    parts = query.data.split("_")
+    room_id = "_".join(parts[1:-1])
+    target_user_id = int(parts[-1])
+    
+    if query.from_user.id != target_user_id:
+        return
+    
+    if room_id not in active_rooms:
+        return
+    
+    player = None
+    for p in active_rooms[room_id].get("players", []):
+        if p.user_id == target_user_id:
+            player = p
+            break
+    
+    if not player:
+        return
+    
+    # Тексты подтверждения
+    if lang == "en":
+        confirm_text = ("⚠️ <b>Are you sure you want to end your turn?</b>\n\n"
+                       "Once you end your turn, you won't be able to take any more actions until your next turn.")
+        yes_text = "✅ Yes"
+        no_text = "❌ No"
+        back_text = "🔙 Back"
+    else:
+        confirm_text = ("⚠️ <b>Ты уверен, что хочешь закончить ход?</b>\n\n"
+                       "После завершения хода ты не сможешь делать действия до следующего хода.")
+        yes_text = "✅ Да"
+        no_text = "❌ Нет"
+        back_text = "🔙 Назад"
+    
+    confirm_keyboard = [
+        [InlineKeyboardButton(yes_text, callback_data=f"confirm_endturn_{room_id}_{target_user_id}"),
+         InlineKeyboardButton(no_text, callback_data=f"cancel_endturn_{room_id}_{target_user_id}")],
+        [InlineKeyboardButton(back_text, callback_data=f"back_to_game_{room_id}_{target_user_id}")]
+    ]
+    
+    await query.edit_message_text(
+        text=confirm_text,
+        reply_markup=InlineKeyboardMarkup(confirm_keyboard),
+        parse_mode="HTML"
+    )
+
+async def next_round(room_id, context):
+    """Начисляет доходы, расходы и возвращает список событий"""
+    if room_id not in active_rooms:
+        return []
+
+    players = active_rooms[room_id].get("players", [])
+    current_round = active_rooms[room_id].get("round", 1)
+    chat_id = active_rooms[room_id]["chat_id"]
+    lang = active_rooms[room_id].get("lang", "en")
+
+    events_list = []
+
+    # 👇 ПРОВЕРКА НА 100 РАУНД
+    if current_round >= 100:
+        if lang == "en":
+            senko_text = "🦊 <b>SENKO'S VISIT!</b>\n\nAt round 100, Senko in Niko's outfit came and said:\n✨ <i>\"You've played so long... Time to rest!\"</i>\n\nGame over. Everyone wins! 🏆"
+        else:
+            senko_text = "🦊 <b>СЕНКО В ГОСТЯХ!</b>\n\nНа 100 раунде к вам пришла Сенко в костюме Нико и сказала:\n✨ <i>«Вы так долго играли... Пора отдохнуть!»</i>\n\nИгра завершена. Все молодцы! 🏆"
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=senko_text,
+            parse_mode="HTML"
+        )
+        del active_rooms[room_id]
+        return []
+
+    for player in players:
+        # Доход от зданий
+        for building_id in player.buildings:
+            building = BUILDINGS.get(building_id)
+            if building and building.get("round_income"):
+                for resource, value in building["round_income"].items():
+                    if hasattr(player, resource):
+                        current = getattr(player, resource)
+                        setattr(player, resource, current + value)
+
+        player.dev_points += 500
+
+        if player.population_growth > 0:
+            growth = int(player.population * player.population_growth / 100)
+            player.population += max(1, growth)
+
+        # События (75% шанс)
+        if random.randint(1, 100) <= 75:
+            events_pool = []
+            for event in EVENTS:
+                weight = int(event["chance"] * 10)
+                events_pool.extend([event] * weight)
+
+            chosen_event = random.choice(events_pool)
+            chosen_event["effect"](player)
+
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
+                player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
+            except:
+                player_name = str(player.user_id)
+
+            if lang == "en":
+                events_list.append(f"👤 {player_name}: {chosen_event['desc_en']}")
+            else:
+                events_list.append(f"👤 {player_name}: {chosen_event['desc_ru']}")
+
+        # Расход еды
+        food_consumed = player.calculate_food_consumption()
+        player.food -= food_consumed
+
+        if player.food < 0:
+            starvation = abs(player.food) // 10 + 1
+            player.population = max(0, player.population - starvation)
+            player.food = 0
+
+        player.depression += 1
+        player.apply_depression()
+
+        # Бунт (если вера < 200)
+        if player.faith < 200 and random.randint(1, 100) <= 10:
+            losses = max(1, player.population // 3)
+            player.population -= losses
+            player.depression += 5
+
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id, player.user_id)
+                player_name = chat_member.user.username or chat_member.user.first_name or str(player.user_id)
+            except:
+                player_name = str(player.user_id)
+
+            if lang == "en":
+                events_list.append(f"🔥 REVOLT! {player_name} lost {losses} units, +5 depression!")
+            else:
+                events_list.append(f"🔥 БУНТ! {player_name} потерял {losses} юнитов, +5 депрессии!")
+
+        # Лимиты
+        player.food = min(player.food, player.food_limit)
+        player.faith = min(player.faith, player.faith_limit)
+        player.labor = min(player.labor, player.labor_limit)
+        player.health = min(player.health, player.health_limit)
+        player.intelligence = min(player.intelligence, player.intelligence_limit)
+        player.money = min(player.money, 10000)
+        player.materials = min(player.materials, 10000)
+        player.dev_points = min(player.dev_points, 10000)
+        player.population = min(player.population, 10000)
+
+    await check_game_over(room_id, context)
+    return events_list
 
 async def delete_events(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Удаляет сообщение с событиями"""
